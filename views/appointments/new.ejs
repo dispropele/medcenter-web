@@ -1,0 +1,51 @@
+<%- include('../partials/header',{title:'Новая запись',ap:'appointments'}) %>
+<div class="page page-narrow">
+  <div class="page-header"><h1>Запись к врачу</h1><a href="/appointments" class="btn btn-outline">← Назад</a></div>
+  <div class="card">
+    <%if(error){%><div class="alert alert-error" style="margin:16px 20px 0"><%=error%></div><%}%>
+    <form method="POST" action="/appointments" class="form">
+      <%if(user.role!=='patient'){%>
+      <div class="form-group"><label>Пациент *</label>
+        <select name="patient_id" required>
+          <option value="">— Выберите пациента —</option>
+          <%patients.forEach(function(p){%>
+          <option value="<%=p.id%>"><%=p.name%></option>
+          <%})%>
+        </select>
+      </div>
+      <%}%>
+      <div class="form-group"><label>Специализация *</label>
+        <select id="spec_id" name="spec_id" required onchange="loadDoctors(this.value)">
+          <option value="">— Выберите специализацию —</option>
+          <%specs.forEach(function(s){%><option value="<%=s.id%>"><%=s.name%></option><%})%>
+        </select>
+      </div>
+      <div class="form-group"><label>Врач *</label>
+        <select id="doctor_id" name="doctor_id" required>
+          <option value="">— Сначала выберите специализацию —</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Дата и время приёма *</label>
+        <input type="datetime-local" name="datetime" required min="<%=new Date().toISOString().slice(0,16)%>">
+      </div>
+      <div class="form-group"><label>Жалобы / цель визита</label>
+        <textarea name="notes" rows="3" placeholder="Опишите жалобы..."></textarea>
+      </div>
+      <div class="form-actions">
+        <a href="/appointments" class="btn btn-outline">Отмена</a>
+        <button class="btn btn-primary">Записаться</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+async function loadDoctors(sid){
+  var sel=document.getElementById('doctor_id');
+  sel.innerHTML='<option value="">Загрузка...</option>';
+  if(!sid){sel.innerHTML='<option value="">— Сначала выберите специализацию —</option>';return;}
+  var docs=await fetch('/api/doctors/'+sid).then(function(r){return r.json();});
+  sel.innerHTML='<option value="">— Выберите врача —</option>'+
+    docs.map(function(d){return '<option value="'+d.id+'">'+d.name+'</option>';}).join('');
+}
+</script>
+<%- include('../partials/footer') %>

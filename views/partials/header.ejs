@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title><%= typeof title!=='undefined'?title+' — ':'' %>МедЦентр</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<% if (user) { %>
+<nav class="navbar">
+  <div class="nav-brand">
+    <span class="nav-logo">🏥</span>
+    <span class="nav-title">МедЦентр</span>
+  </div>
+
+  <div class="nav-links">
+    <a href="/dashboard"    class="<%= ap==='dashboard'   ?'active':'' %>">Главная</a>
+    <a href="/appointments" class="<%= ap==='appointments'?'active':'' %>">Записи к врачу</a>
+    <a href="/medical-card" class="<%= ap==='medical-card'?'active':'' %>">Медкарта</a>
+    <% if (user.role==='doctor'||user.role==='admin') { %>
+    <% } %>
+    <% if (user.role==='admin') { %>
+    <div class="nav-dropdown" id="navAdmin">
+      <button class="nav-drop-btn" onclick="toggleDrop('navAdmin')">
+        Администрирование ▾
+      </button>
+      <div class="nav-drop-menu" id="navAdminMenu">
+        <a href="/contracts">Договоры</a>
+        <a href="/receipts">Квитанции</a>
+        <a href="/checks">Чеки</a>
+        <a href="/reports">Отчёты</a>
+        <hr>
+        <a href="/admin/specializations">Специализации</a>
+        <a href="/admin/services">Услуги</a>
+        <a href="/admin/users">Пользователи</a>
+      </div>
+    </div>
+    <% } %>
+  </div>
+
+  <div class="nav-user">
+    <span class="nav-user-name"><%= user.name.split(' ')[0] %></span>
+    <span class="role-badge role-<%= user.role %>">
+      <%= user.role==='admin'?'Администратор':user.role==='doctor'?'Врач':'Пациент' %>
+    </span>
+    <a href="/logout" class="btn-logout">Выйти</a>
+  </div>
+</nav>
+<% } %>
+
+<main class="<%= user?'with-nav':'' %>">
+
+<script>
+// Dropdown: open on click, close on outside click or second click
+function toggleDrop(id) {
+  var menu = document.getElementById(id + 'Menu');
+  var isOpen = menu.classList.contains('open');
+  // close all
+  document.querySelectorAll('.nav-drop-menu').forEach(function(m){ m.classList.remove('open'); });
+  if (!isOpen) menu.classList.add('open');
+}
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.nav-dropdown')) {
+    document.querySelectorAll('.nav-drop-menu').forEach(function(m){ m.classList.remove('open'); });
+  }
+});
+</script>

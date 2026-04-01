@@ -1,0 +1,60 @@
+<%- include('partials/header',{title:'Регистрация',ap:''}) %>
+<div class="auth-wrap">
+  <div class="auth-card" style="max-width:500px">
+    <h2 style="margin-bottom:18px;text-align:center">Создание аккаунта</h2>
+    <%if(error){%><div class="alert alert-error"><%=error%></div><%}%>
+    <form method="POST" action="/register" class="form" style="padding:0">
+      <div class="form-group"><label>ФИО *</label>
+        <input type="text" name="name" placeholder="Иванов Иван Иванович" required>
+      </div>
+      <div class="form-group"><label>Email *</label>
+        <input type="email" name="email" placeholder="example@mail.ru" required>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Телефон</label>
+          <input type="text" id="phone" name="phone" placeholder="+7 (999) 000-00-00" maxlength="18">
+        </div>
+        <div class="form-group"><label>Дата рождения</label>
+          <input type="text" id="dob" name="dob" placeholder="01.01.1990" maxlength="10">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Пол</label>
+          <select name="gender"><option value="">—</option><option>М</option><option>Ж</option></select>
+        </div>
+        <div class="form-group"><label>Адрес</label>
+          <input type="text" name="address" placeholder="ул. Ленина, 1">
+        </div>
+      </div>
+      <div class="form-group"><label>Пароль * (не менее 6 символов)</label>
+        <input type="password" name="password" required>
+      </div>
+      <div class="form-group"><label>Повторите пароль *</label>
+        <input type="password" name="confirm" required>
+      </div>
+      <button class="btn btn-primary btn-block" style="margin-top:6px">Зарегистрироваться</button>
+    </form>
+    <p class="auth-link">Уже есть аккаунт? <a href="/login">Войти</a></p>
+  </div>
+</div>
+<script>
+document.getElementById('phone').addEventListener('input',function(){
+  var v=this.value.replace(/\D/g,'');
+  if(v.startsWith('8'))v='7'+v.slice(1);
+  if(!v.startsWith('7'))v='7'+v;
+  v=v.slice(0,11);
+  var r='+7';
+  if(v.length>1)r+=' ('+v.slice(1,4);
+  if(v.length>=4)r+=') '+v.slice(4,7);
+  if(v.length>=7)r+='-'+v.slice(7,9);
+  if(v.length>=9)r+='-'+v.slice(9,11);
+  this.value=r;
+});
+document.getElementById('dob').addEventListener('input',function(){
+  var v=this.value.replace(/\D/g,'').slice(0,8),r=v;
+  if(v.length>2)r=v.slice(0,2)+'.'+v.slice(2);
+  if(v.length>4)r=v.slice(0,2)+'.'+v.slice(2,4)+'.'+v.slice(4);
+  this.value=r;
+});
+</script>
+<%- include('partials/footer') %>

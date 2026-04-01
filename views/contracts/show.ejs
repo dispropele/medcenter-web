@@ -1,0 +1,63 @@
+<%- include('../partials/header',{title:'Договор #'+contract.id,ap:''}) %>
+<div class="page">
+  <% 
+    function formatDateTime(dateStr) {
+      if (!dateStr) return '—';
+      if (dateStr.includes('.')) return dateStr;
+      const d = new Date(dateStr);
+      if (isNaN(d)) return dateStr;
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      if (dateStr.includes('T')) {
+        const hours = String(d.getHours()).padStart(2, '0');
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        return `${day}.${month}.${year} ${hours}:${minutes}`;
+      }
+      return `${day}.${month}.${year}`;
+    }
+  %>
+  <div class="page-header">
+    <h1>Договор №<%=contract.id%> от <%= formatDateTime(contract.date) %></h1>
+    <div style="display:flex;gap:8px">
+      <button onclick="window.print()" class="btn btn-outline">🖨 Печать</button>
+      <a href="/contracts" class="btn btn-outline">← Назад</a>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div>
+      <div class="card mb-16">
+        <div class="card-header"><h2>Данные пациента</h2></div>
+        <dl class="info-list">
+          <dt>ФИО</dt><dd><strong><%=contract.patient_name%></strong></dd>
+          <dt>Телефон</dt><dd><%=contract.phone||'—'%></dd>
+          <dt>Дата рождения</dt><dd><%= formatDateTime(contract.dob) %></dd>
+          <%if(contract.address){%><dt>Адрес</dt><dd><%=contract.address%></dd><%}%>
+          <dt>Дата договора</dt><dd><%= formatDateTime(contract.date) %></dd>
+          <dt>Общая стоимость</dt><dd><strong><%=Number(contract.total).toLocaleString('ru')%> ₽</strong></dd>
+        </dl>
+      </div>
+      <a href="/receipts/new?contract_id=<%=contract.id%>" class="btn btn-primary" style="margin-bottom:16px">+ Добавить квитанцию</a>
+    </div>
+    <div class="card">
+      <div class="card-header"><h2>Квитанции</h2><span class="badge badge-info"><%=receipts.length%></span></div>
+      <%if(!receipts.length){%><p class="text-muted" style="padding:16px">Квитанций нет.</p><%}else{%>
+      <table class="table table-sm">
+        <thead><tr><th>Дата</th><th>Сумма</th><th>Статус</th><th>Оплачен</th><th></th></tr></thead>
+        <tbody>
+          <%receipts.forEach(function(r){%>
+          <tr>
+            <td><%= formatDateTime(r.date) %></td>
+            <td><strong><%=Number(r.amount).toLocaleString('ru')%> ₽</strong></td>
+            <td><span class="badge badge-<%=r.status==='Оплачено'?'success':'warning'%>"><%=r.status%></span></td>
+            <td><%-r.paid>0?'<span class="badge badge-success">Да</span>':'<span class="badge badge-gray">Нет</span>'%></td>
+            <td><a href="/receipts/<%=r.id%>" class="btn btn-sm btn-outline">Открыть</a></td>
+          </tr>
+          <%})%>
+        </tbody>
+      </table>
+      <%}%>
+    </div>
+  </div>
+</div>
+<%- include('../partials/footer') %>

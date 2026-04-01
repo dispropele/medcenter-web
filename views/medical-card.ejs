@@ -1,0 +1,94 @@
+<%- include('partials/header',{title:'Медицинская карта',ap:'medical-card'}) %>
+<% 
+  function formatDateTime(dateStr) {
+    if (!dateStr) return '—';
+    if (dateStr.includes('.')) return dateStr;
+    const d = new Date(dateStr);
+    if (isNaN(d)) return dateStr;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    if (dateStr.includes('T')) {
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      return `${day}.${month}.${year} ${hours}:${minutes}`;
+    }
+    return `${day}.${month}.${year}`;
+  }
+%>
+<div class="page">
+  <div class="page-header"><h1>Медицинская карта</h1></div>
+
+  <%if(user.role!=='patient'){%>
+  <div class="card mb-16">
+    <div style="padding:14px 18px">
+      <form method="GET" action="/medical-card" style="display:flex;gap:12px;align-items:flex-end">
+        <div class="form-group" style="margin:0;flex:1">
+          <label>Выберите пациента</label>
+          <select name="patient_id" onchange="this.form.submit()">
+            <option value="">— Выберите пациента —</option>
+            <%patients.forEach(function(p){%>
+            <option value="<%=p.id%>" <%=selectedPid==p.id?'selected':''%>><%=p.name%></option>
+            <%})%>
+          </select>
+        </div>
+      </form>
+    </div>
+  </div>
+  <%}%>
+
+  <%if(!card){%>
+  <div class="empty-state">
+    <div class="empty-icon">📋</div>
+    <p><%=user.role==='patient'?'Ваша медицинская карта пуста.':'Выберите пациента.'%></p>
+  </div>
+  <%}else{%>
+
+  <div class="card mb-16">
+    <div class="card-header"><h2>Данные пациента</h2></div>
+    <div class="pi-grid">
+      <div><div class="pi-label">ФИО</div><div class="pi-val"><strong><%=card.patient.name%></strong></div></div>
+      <div><div class="pi-label">Email</div><div class="pi-val"><%=card.patient.email%></div></div>
+      <div><div class="pi-label">Телефон</div><div class="pi-val"><%=card.patient.phone||'—'%></div></div>
+      <div><div class="pi-label">Дата рождения</div><div class="pi-val"><%= formatDateTime(card.patient.dob) %></div></div>
+      <%if(card.patient.gender){%><div><div class="pi-label">Пол</div><div class="pi-val"><%=card.patient.gender%></div></div><%}%>
+      <%if(card.patient.address){%><div><div class="pi-label">Адрес</div><div class="pi-val"><%=card.patient.address%></div></div><%}%>
+    </div>
+  </div>
+
+  <%if(!card.visits.length){%>
+  <div class="empty-state"><div class="empty-icon">📄</div><p>Нет посещений с заполненной картой.</p></div>
+  <%}else{%>
+  <%card.visits.forEach(function(v){%>
+  <div class="card mb-16">
+    <div class="card-header">
+      <div>
+        <h3><%=v.spec_name%></h3>
+        <span class="text-muted" style="font-size:12.5px">Врач: <%=v.doc_name%> · <%= formatDateTime(v.datetime) %></span>
+      </div>
+      <a href="/appointments/<%=v.appointment_id%>" class="btn btn-sm btn-outline">Открыть приём</a>
+    </div>
+    <div class="visit-section">
+      <div class="form-row">
+        <div>
+          <div class="pi-label">Диагноз</div>
+          <div class="pi-val" style="margin-top:3px"><%=v.diagnosis||'<span class="text-muted">Не указан</span>'%></div>
+        </div>
+        <div>
+          <div class="pi-label">Аллергии</div>
+          <div class="pi-val" style="margin-top:3px"><%=v.allergy||'—'%></div>
+        </div>
+      </div>
+      <%if(v.appt_notes){%>
+      <div style="margin-top:10px">
+        <div class="pi-label">Жалобы при обращении</div>
+        <div class="pi-val" style="margin-top:3px"><%=v.appt_notes%></div>
+      </div>
+      <%}%>
+    </div>
+  </div>
+  <%})%>
+  <%}%>
+  <%}%>
+</div>
+<%- include('partials/footer') %>

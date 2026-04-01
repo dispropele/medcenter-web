@@ -1,0 +1,116 @@
+<%- include('../partials/header',{title:'Квитанция #'+receipt.id,ap:''}) %>
+<% 
+  function formatDateTime(dateStr) {
+    if (!dateStr) return '—';
+    if (dateStr.includes('.')) return dateStr;
+    const d = new Date(dateStr);
+    if (isNaN(d)) return dateStr;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    if (dateStr.includes('T')) {
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      return `${day}.${month}.${year} ${hours}:${minutes}`;
+    }
+    return `${day}.${month}.${year}`;
+  }
+%>
+<div class="page">
+  <div class="page-header">
+    <h1>Квитанция №<%=receipt.id%></h1>
+    <div style="display:flex;gap:8px">
+      <button onclick="window.print()" class="btn btn-outline">🖨 Печать</button>
+      <a href="/receipts" class="btn btn-outline">← Назад</a>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div>
+      <div class="card mb-16">
+        <div class="card-header"><h2>Данные квитанции</h2></div>
+        <dl class="info-list">
+          <dt>Пациент</dt><dd><strong><%=receipt.patient_name%></strong></dd>
+          <dt>Дата</dt><dd><%= formatDateTime(receipt.date) %></dd>
+          <dt>Сумма</dt><dd><strong><%=Number(receipt.amount).toLocaleString('ru')%> ₽</strong></dd>
+          <dt>Статус</dt>
+          <dd><span class="badge badge-<%=receipt.status==='Оплачено'?'success':'warning'%>"><%=receipt.status%></span></dd>
+        </dl>
+        <div style="margin:0 18px 16px;padding-top:12px;border-top:1px solid var(--border)">
+          <form method="POST" action="/receipts/<%=receipt.id%>/status" style="display:flex;gap:8px">
+            <select name="status" style="flex:1">
+              <option <%=receipt.status==='Ожидает оплаты'?'selected':''%>>Ожидает оплаты</option>
+              <option <%=receipt.status==='Оплачено'?'selected':''%>>Оплачено</option>
+              <option <%=receipt.status==='Отменено'?'selected':''%>>Отменено</option>
+            </select>
+            <button class="btn btn-sm btn-primary">Сохранить</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h2>Состав услуг</h2></div>
+        <table class="table table-sm">
+          <thead><tr><th>#</th><th>Услуга</th><th>Кол</th><th>Цена</th><th>Сумма</th></tr></thead>
+          <tbody>
+            <%var sTotal=0;services.forEach(function(s,i){var sum=(parseFloat(s.price)||0)*(parseInt(s.qty)||1);sTotal+=sum;%>
+            <tr>
+              <td class="text-muted"><%=i+1%></td>
+              <td><%=s.svc_name%></td>
+              <td><%=s.qty%></td>
+              <td><%=Number(parseFloat(s.price)).toLocaleString('ru')%> ₽</td>
+              <td><%=Number(sum).toLocaleString('ru')%> ₽</td>
+            </tr>
+            <%})%>
+          </tbody>
+          <tfoot>
+            <tr class="total-row-table"><td colspan="4"><strong>Итого:</strong></td><td><strong><%=Number(sTotal).toLocaleString('ru')%> ₽</strong></td></tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h2>Чеки об оплате</h2></div>
+      <%if(!checks.length){%>
+      <p class="text-muted" style="padding:16px">Оплата не зафиксирована.</p>
+      <%}else{%>
+      <table class="table table-sm">
+        <thead><tr><th>Дата</th><th>Сумма</th><th>Способ оплаты</th></tr></thead>
+        <tbody>
+          <%checks.forEach(function(c){%>
+          <tr>
+            <td><%= formatDateTime(c.date) %></td>
+            <td><strong><%=Number(c.amount).toLocaleString('ru')%> ₽</strong></td>
+            <td><span class="badge badge-info"><%=c.payment_method%></span></td>
+          </tr>
+          <%})%>
+        </tbody>
+      </table>
+      <%}%>
+      <div style="padding:12px 16px;border-top:1px solid var(--border)">
+        <details>
+          <summary class="btn btn-sm btn-primary" style="cursor:pointer;display:inline-block">+ Добавить чек</summary>
+          <form method="POST" action="/checks" style="margin-top:12px">
+            <input type="hidden" name="receipt_id" value="<%=receipt.id%>">
+            <div class="form-row">
+              <div class="form-group"><label>Сумма ₽</label>
+                <input type="number" name="amount" value="<%=receipt.amount%>" min="0" step="0.01" required>
+              </div>
+              <div class="form-group"><label>Дата</label>
+                <input type="date" name="date" value="<%=new Date().toISOString().slice(0,10)%>" required>
+              </div>
+            </div>
+            <div class="form-group"><label>Способ оплаты</label>
+              <select name="payment_method">
+                <option>Наличные</option><option>Карта</option><option>Перевод</option>
+              </select>
+            </div>
+            <button class="btn btn-primary btn-sm">Провести оплату</button>
+          </form>
+        </details>
+      </div>
+    </div>
+  </div>
+</div>
+<%- include('../partials/footer') %>

@@ -1,0 +1,53 @@
+<%- include('../partials/header', { title: 'Выдать направление', activePage: 'referrals' }) %>
+<div class="page page-narrow">
+  <div class="page-header">
+    <h1>Направление на анализ</h1>
+    <a href="/referrals" class="btn btn-outline">← Назад</a>
+  </div>
+  <div class="card">
+    <% if (error) { %><div class="alert alert-error"><%= error %></div><% } %>
+    <form method="POST" action="/referrals" class="form">
+      <% if (user.role === 'admin') { %>
+      <div class="form-group">
+        <label>Врач *</label>
+        <select name="doctor_id" required>
+          <option value="">— Выберите врача —</option>
+          <% doctors.forEach(d => { %>
+          <option value="<%= d.id %>"><%= d.name %></option>
+          <% }) %>
+        </select>
+      </div>
+      <% } else { %>
+      <div class="alert alert-info">Направление будет выдано от вашего имени.</div>
+      <% } %>
+
+      <div class="form-group">
+        <label>Пациент *</label>
+        <select name="patient_id" required>
+          <option value="">— Выберите пациента —</option>
+          <% patients.forEach(p => { %>
+          <option value="<%= p.id %>"><%= p.name %></option>
+          <% }) %>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Вид анализа *</label>
+        <select name="analysis_id" required>
+          <option value="">— Выберите анализ —</option>
+          <% analyses.forEach(a => { %>
+          <option value="<%= a.id %>"><%= a.name %> — <%= Number(a.price).toLocaleString('ru') %> ₽</option>
+          <% }) %>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Дата выдачи *</label>
+        <input type="date" name="date" required value="<%= new Date().toISOString().slice(0,10) %>">
+      </div>
+      <div class="form-actions">
+        <a href="/referrals" class="btn btn-outline">Отмена</a>
+        <button type="submit" class="btn btn-primary">Выдать направление</button>
+      </div>
+    </form>
+  </div>
+</div>
+<%- include('../partials/footer') %>

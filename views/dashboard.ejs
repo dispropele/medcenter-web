@@ -1,0 +1,85 @@
+<%- include('partials/header',{title:'Главная',ap:'dashboard'}) %>
+<% 
+  function formatDateTime(dateStr) {
+    if (!dateStr) return '—';
+    if (dateStr.includes('.')) return dateStr;
+    const d = new Date(dateStr);
+    if (isNaN(d)) return dateStr;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    if (dateStr.includes('T')) {
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      return `${day}.${month}.${year} ${hours}:${minutes}`;
+    }
+    return `${day}.${month}.${year}`;
+  }
+%>
+<div class="page">
+  <div class="page-header">
+    <div>
+      <h1>Добро пожаловать, <%= user.name.split(' ')[0] %>!</h1>
+      <p class="text-muted" style="font-size:13px">
+        <%= user.role==='admin'?'Администратор системы':user.role==='doctor'?'Врач':'Личный кабинет пациента' %>
+      </p>
+    </div>
+    <% if(user.role==='patient'){%>
+      <a href="/appointments/new" class="btn btn-primary">+ Записаться к врачу</a>
+    <%}else if(user.role==='admin'){%>
+      <a href="/contracts/new" class="btn btn-primary">+ Новый договор</a>
+    <%}%>
+  </div>
+
+  <% if(user.role==='admin'){%>
+  <div class="stats-grid mb-16">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#EFF6FF">👥</div>
+      <div><div class="stat-val"><%=stats.patients%></div><div class="stat-label">Пациентов</div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#F0FDF4">📋</div>
+      <div><div class="stat-val"><%=stats.appointments%></div><div class="stat-label">Записей</div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#FFFBEB">📄</div>
+      <div><div class="stat-val"><%=stats.contracts%></div><div class="stat-label">Договоров</div></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#FFF1F2">💰</div>
+      <div><div class="stat-val"><%=Number(stats.revenue).toLocaleString('ru')%> ₽</div><div class="stat-label">Выручка</div></div>
+    </div>
+  </div>
+  <%}%>
+
+  <div class="card">
+    <div class="card-header">
+      <h2><%=user.role==='admin'?'Последние записи':'Мои записи к врачу'%></h2>
+      <a href="/appointments" class="btn btn-sm btn-outline">Все записи</a>
+    </div>
+    <%if(!appointments.length){%>
+    <div class="empty-state">
+      <div class="empty-icon">📅</div><p>Нет активных записей</p>
+      <%if(user.role==='patient'){%><a href="/appointments/new" class="btn btn-primary">Записаться к врачу</a><%}%>
+    </div>
+    <%}else{%>
+    <table class="table">
+      <thead><tr>
+        <%if(user.role!=='patient'){%><th>Пациент</th><%}%>
+        <th>Специализация</th><th>Врач</th><th>Дата и время</th><th>Статус</th><th></th>
+      </tr></thead>
+      <tbody>
+        <%appointments.forEach(function(a){%>
+        <tr>
+          <%if(user.role!=='patient'){%><td><%=a.patient_name%></td><%}%>
+          <td><%=a.spec_name%></td><td><%=a.doc_name%></td><td><%= formatDateTime(a.datetime) %></td>
+          <td><span class="badge badge-<%=a.status==='Принят'?'success':a.status==='Отменён'?'danger':'warning'%>"><%=a.status%></span></td>
+          <td><a href="/appointments/<%=a.id%>" class="btn btn-sm btn-outline">Открыть</a></td>
+        </tr>
+        <%})%>
+      </tbody>
+    </table>
+    <%}%>
+  </div>
+</div>
+<%- include('partials/footer') %>

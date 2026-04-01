@@ -1,0 +1,25 @@
+<%- include('partials/header',{title:'Вход',ap:''}) %>
+<div class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-logo">🏥</div>
+    <div class="auth-title">МедЦентр</div>
+    <div class="auth-sub">Платная поликлиника</div>
+    <% if(error){%><div class="alert alert-error"><%=error%></div><%}%>
+    <form method="POST" action="/login" class="form" style="padding:0">
+      <div class="form-group"><label>Email</label>
+        <input type="email" name="email" placeholder="admin@medcenter.ru" required autofocus>
+      </div>
+      <div class="form-group"><label>Пароль</label>
+        <input type="password" name="password" placeholder="••••••••" required>
+      </div>
+      <button class="btn btn-primary btn-block" style="margin-top:6px">Войти</button>
+    </form>
+    <p class="auth-link">Нет аккаунта? <a href="/register">Зарегистрироваться</a></p>
+    <div class="auth-hint">
+      <strong>Администратор:</strong> admin@medcenter.ru / admin123<br>
+      <strong>Врач:</strong> ivanov@medcenter.ru / doctor123<br>
+      <strong>Пациент:</strong> ivanov.p@mail.ru / 123456
+    </div>
+  </div>
+</div>
+<%- include('partials/footer') %>

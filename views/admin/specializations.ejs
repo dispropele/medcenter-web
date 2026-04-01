@@ -1,0 +1,40 @@
+<%- include('../partials/header',{title:'Специализации',ap:''}) %>
+<div class="page">
+  <div class="page-header"><h1>Справочник специализаций</h1></div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-header"><h2>Список</h2><span class="badge badge-info"><%=specs.length%></span></div>
+      <%if(!specs.length){%><div class="empty-state"><p>Пусто</p></div><%}else{%>
+      <table class="table">
+        <thead><tr><th>#</th><th>Наименование</th><th></th></tr></thead>
+        <tbody>
+          <%specs.forEach(function(s,i){%>
+          <tr>
+            <td class="text-muted"><%=i+1%></td>
+            <td><strong><%=s.name%></strong></td>
+            <td>
+              <form method="POST" action="/admin/specializations/<%=s.id%>/delete" onsubmit="return confirm('Удалить «<%=s.name%>»?')">
+                <button class="btn btn-sm btn-danger">Удалить</button>
+              </form>
+            </td>
+          </tr>
+          <%})%>
+        </tbody>
+      </table>
+      <%}%>
+    </div>
+    <div class="card">
+      <div class="card-header"><h2>Добавить</h2></div>
+      <%if(error){%><div class="alert alert-error" style="margin:14px 18px 0"><%=error%></div><%}%>
+      <%if(success){%><div class="alert alert-success" style="margin:14px 18px 0"><%=success%></div><%}%>
+      <form method="POST" action="/admin/specializations" class="form">
+        <div class="form-group"><label>Наименование *</label>
+          <input type="text" name="name" placeholder="Например: Пульмонолог" required autofocus>
+          <span class="form-hint">Не менее 3 символов</span>
+        </div>
+        <div class="form-actions"><button class="btn btn-primary">Добавить</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+<%- include('../partials/footer') %>

@@ -1,0 +1,70 @@
+<%- include('../partials/header', { title: 'Направления на анализ', activePage: 'referrals' }) %>
+<% 
+  function formatDateTime(dateStr) {
+    if (!dateStr) return '—';
+    if (dateStr.includes('.')) return dateStr;
+    const d = new Date(dateStr);
+    if (isNaN(d)) return dateStr;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    if (dateStr.includes('T')) {
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      return `${day}.${month}.${year} ${hours}:${minutes}`;
+    }
+    return `${day}.${month}.${year}`;
+  }
+%>
+<div class="page">
+  <div class="page-header">
+    <h1>Направления на анализ</h1>
+    <% if (user.role === 'doctor' || user.role === 'admin') { %>
+    <a href="/referrals/new" class="btn btn-primary">+ Выдать направление</a>
+    <% } %>
+  </div>
+  <div class="card">
+    <% if (referrals.length === 0) { %>
+    <div class="empty-state"><div class="empty-icon">🔬</div><p>Направлений нет.</p></div>
+    <% } else { %>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <% if (user.role !== 'patient') { %><th>Пациент</th><% } %>
+          <th>Анализ</th>
+          <th>Цена</th>
+          <% if (user.role !== 'doctor') { %><th>Врач</th><% } %>
+          <th>Дата выдачи</th>
+          <th>Статус</th>
+          <% if (user.role !== 'patient') { %><th>Действие</th><% } %>
+        </tr>
+      </thead>
+      <tbody>
+        <% referrals.forEach((r, i) => { %>
+        <tr>
+          <td class="text-muted"><%= i+1 %></td>
+          <% if (user.role !== 'patient') { %><td><strong><%= r.patient_name %></strong></td><% } %>
+          <td><%= r.an_name %></td>
+          <td><%= Number(r.an_price).toLocaleString('ru') %> ₽</td>
+          <% if (user.role !== 'doctor') { %><td><%= r.doc_name %></td><% } %>
+          <td><%= formatDateTime(r.date) %></td>
+          <td><span class="badge badge-<%= r.status==='Выполнено'?'success':'warning' %>"><%= r.status %></span></td>
+          <% if (user.role !== 'patient') { %>
+          <td>
+            <form method="POST" action="/referrals/<%= r.id %>/status" style="display:inline">
+              <select name="status" onchange="this.form.submit()" style="font-size:12px;padding:2px 6px">
+                <option <%= r.status==='Выдано'?'selected':'' %>>Выдано</option>
+                <option <%= r.status==='Выполнено'?'selected':'' %>>Выполнено</option>
+              </select>
+            </form>
+          </td>
+          <% } %>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <% } %>
+  </div>
+</div>
+<%- include('../partials/footer') %>

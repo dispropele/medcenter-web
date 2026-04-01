@@ -1,0 +1,177 @@
+<%- include('../partials/header',{title:'Запись #'+appt.id,ap:'appointments'}) %>
+<% 
+  function formatDateTime(dateStr) {
+    if (!dateStr) return '—';
+    if (dateStr.includes('.')) return dateStr;
+    const d = new Date(dateStr);
+    if (isNaN(d)) return dateStr;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    if (dateStr.includes('T')) {
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      return `${day}.${month}.${year} ${hours}:${minutes}`;
+    }
+    return `${day}.${month}.${year}`;
+  }
+%>
+<div class="page">
+  <div class="page-header">
+    <h1>Запись к врачу #<%=appt.id%></h1>
+    <a href="/appointments" class="btn btn-outline">← Назад</a>
+  </div>
+
+  <div class="grid-2">
+    <!-- Левая колонка: данные записи + смена статуса -->
+    <div>
+      <div class="card mb-16">
+        <div class="card-header"><h2>Информация о приёме</h2></div>
+        <dl class="info-list">
+          <dt>Пациент</dt><dd><strong><%=appt.patient_name%></strong></dd>
+          <dt>Телефон</dt><dd><%=appt.patient_phone||'—'%></dd>
+          <dt>Дата рождения</dt><dd><%= formatDateTime(appt.patient_dob) %></dd>
+          <%if(appt.patient_gender){%><dt>Пол</dt><dd><%=appt.patient_gender%></dd><%}%>
+          <%if(appt.patient_address){%><dt>Адрес</dt><dd><%=appt.patient_address%></dd><%}%>
+          <dt>Специализация</dt><dd><%=appt.spec_name%></dd>
+          <dt>Врач</dt><dd><%=appt.doc_name%></dd>
+          <dt>Дата и время</dt><dd><strong><%= formatDateTime(appt.datetime) %></strong></dd>
+          <dt>Статус</dt>
+          <dd><span class="badge badge-<%=appt.status==='Принят'?'success':appt.status==='Отменён'?'danger':'warning'%>"><%=appt.status%></span></dd>
+          <%if(appt.notes){%><dt>Примечание</dt><dd><%=appt.notes%></dd><%}%>
+        </dl>
+        <%if(user.role==='admin'||user.role==='doctor'){%>
+        <div style="margin:0 18px 16px;padding-top:14px;border-top:1px solid var(--border)">
+          <form method="POST" action="/appointments/<%=appt.id%>/status" style="display:flex;gap:8px">
+            <select name="status" style="flex:1">
+              <option <%=appt.status==='Ожидает'?'selected':''%>>Ожидает</option>
+              <option <%=appt.status==='Принят'?'selected':''%>>Принят</option>
+              <option <%=appt.status==='Отменён'?'selected':''%>>Отменён</option>
+            </select>
+            <button class="btn btn-sm btn-primary">Сохранить</button>
+          </form>
+        </div>
+        <%}%>
+      </div>
+
+      <!-- Карта посещения -->
+      <div class="card">
+        <div class="card-header"><h2>Карта посещения</h2></div>
+        <%if(visit){%>
+        <dl class="info-list">
+          <dt>Диагноз</dt><dd><%=visit.diagnosis||'—'%></dd>
+          <dt>Аллергии</dt><dd><%=visit.allergy||'—'%></dd>
+          <dt>Обновлено</dt><dd class="text-muted"><%= formatDateTime(visit.updated_at) %></dd>
+        </dl>
+        <%}else{%>
+        <p class="text-muted" style="padding:16px">Карта не заполнена.</p>
+        <%}%>
+        <%if(user.role==='doctor'||user.role==='admin'){%>
+        <div style="margin:0 18px 16px">
+          <details <%=visit?'':'open'%>>
+            <summary class="btn btn-sm btn-outline" style="cursor:pointer;display:inline-block">
+              <%=visit?'Редактировать карту':'✏ Заполнить карту посещения'%>
+            </summary>
+            <form method="POST" action="/visits/<%=appt.id%>" style="margin-top:10px">
+              <div class="form-group"><label>Диагноз</label>
+                <textarea name="diagnosis" rows="3"><%=visit?visit.diagnosis:''%></textarea>
+              </div>
+              <div class="form-group"><label>Аллергии</label>
+                <input type="text" name="allergy" value="<%=visit?visit.allergy:''%>" placeholder="Нет / ...">
+              </div>
+              <button class="btn btn-primary btn-sm">Сохранить</button>
+            </form>
+          </details>
+        </div>
+        <%}%>
+      </div>
+    </div>
+
+    <!-- Правая колонка: анализы посещения -->
+    <div class="card">
+      <div class="card-header">
+        <h2>Анализы посещения</h2>
+        <span class="badge badge-gray">Отсортированы по дате</span>
+      </div>
+
+      <%if(!analyses.length){%>
+      <p class="text-muted" style="padding:16px">Направлений на анализ нет.</p>
+      <%}else{%>
+      <table class="table table-sm">
+        <thead><tr><th>Дата</th><th>Анализ / услуга</th><th>Цена</th><th>Результат</th><%if(user.role!=='patient'){%><th></th><%}%></tr></thead>
+        <tbody>
+          <%analyses.forEach(function(a){%>
+          <tr>
+            <td><%= formatDateTime(a.date_assigned) %></td>
+            <td><strong><%=a.svc_name%></strong></td>
+            <td><%=Number(a.svc_price).toLocaleString('ru')%> ₽</td>
+            <td>
+              <%if(user.role!=='patient'&&!a.result){%>
+              <form method="POST" action="/visit-analyses/<%=a.id%>/result" class="result-form">
+                <input type="hidden" name="appointment_id" value="<%=appt.id%>">
+                <input type="text" name="result" placeholder="Результат...">
+                <button class="btn btn-sm btn-success">✓</button>
+              </form>
+              <%}else{%>
+              <span class="<%=a.result?'':'text-muted'%>"><%=a.result||'Ожидается'%></span>
+              <%}%>
+            </td>
+            <%if(user.role!=='patient'){%>
+            <td>
+              <form method="POST" action="/visit-analyses/<%=a.id%>/delete" style="display:inline" onsubmit="return confirm('Удалить?')">
+                <input type="hidden" name="appointment_id" value="<%=appt.id%>">
+                <button class="btn btn-sm btn-danger">✕</button>
+              </form>
+            </td>
+            <%}%>
+          </tr>
+          <%})%>
+        </tbody>
+      </table>
+      <%}%>
+
+      <%if((user.role==='doctor'||user.role==='admin')&&visit){%>
+      <div style="padding:12px 16px;border-top:1px solid var(--border)">
+        <details>
+          <summary class="btn btn-sm btn-outline" style="cursor:pointer;display:inline-block">+ Добавить анализ</summary>
+          <form method="POST" action="/visit-analyses" style="margin-top:10px">
+            <input type="hidden" name="visit_id" value="<%=visit.id%>">
+            <%# AUTO-FILL: врач и пациент уже известны из appt — не надо выбирать %>
+            <div class="form-row">
+              <div class="form-group"><label>Услуга / анализ *</label>
+                <select name="service_id" id="anaSelect" required onchange="fillPrice(this)">
+                  <option value="">— Выберите —</option>
+                  <%
+                    var allSvcs = [];
+                    /* Список услуг передаётся через глобальную переменную или через отдельный fetch */
+                  %>
+                </select>
+              </div>
+              <div class="form-group"><label>Дата назначения *</label>
+                <input type="date" name="date_assigned" value="<%=new Date().toISOString().slice(0,10)%>" required>
+              </div>
+            </div>
+            <button class="btn btn-primary btn-sm">Добавить</button>
+          </form>
+        </details>
+      </div>
+      <%}else if((user.role==='doctor'||user.role==='admin')&&!visit){%>
+      <p class="text-muted" style="padding:12px 16px;font-size:13px">⚠ Сначала заполните карту посещения, затем добавляйте анализы.</p>
+      <%}%>
+    </div>
+  </div>
+</div>
+
+<script>
+// Загружаем список услуг для select
+fetch('/api/services').then(function(r){return r.json();}).then(function(svcs){
+  var sel=document.getElementById('anaSelect');
+  if(!sel)return;
+  svcs.forEach(function(s){
+    var o=document.createElement('option');
+    o.value=s.id; o.textContent=s.name+' — '+Number(s.price).toLocaleString('ru')+' ₽';
+    o.dataset.price=s.price; sel.appendChild(o);
+  });
+});
+</script>
+<%- include('../partials/footer') %>

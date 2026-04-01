@@ -1,0 +1,134 @@
+<%- include('../partials/header',{title:'Отчёты',ap:''}) %>
+<% 
+  function formatDateTime(dateStr) {
+    if (!dateStr) return '—';
+    if (dateStr.includes('.')) return dateStr;
+    const d = new Date(dateStr);
+    if (isNaN(d)) return dateStr;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    if (dateStr.includes('T')) {
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      return `${day}.${month}.${year} ${hours}:${minutes}`;
+    }
+    return `${day}.${month}.${year}`;
+  }
+%>
+<div class="page">
+  <div class="page-header">
+    <h1>Отчёты</h1>
+    <%if(from&&to&&(appointments.length||referrals.length)){%>
+    <button onclick="window.print()" class="btn btn-outline">🖨 Печать</button>
+    <%}%>
+  </div>
+
+  <div class="card mb-16">
+    <div style="padding:14px 18px">
+      <form method="GET" action="/reports">
+        <div class="form-row" style="align-items:flex-end">
+          <div class="form-group" style="margin:0"><label>Период с</label>
+            <input type="date" name="from" value="<%=from%>">
+          </div>
+          <div class="form-group" style="margin:0"><label>по</label>
+            <input type="date" name="to" value="<%=to%>">
+          </div>
+          <div class="form-group" style="margin:0"><label>Тип отчёта</label>
+            <select name="type">
+              <option value="">Все</option>
+              <option value="appointments" <%=type==='appointments'?'selected':''%>>Записи к врачу</option>
+              <option value="referrals"    <%=type==='referrals'   ?'selected':''%>>Анализы посещений</option>
+            </select>
+          </div>
+          <div style="padding-bottom:2px">
+            <button class="btn btn-primary">Сформировать</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <%if(!from||!to){%>
+  <div class="empty-state"><div class="empty-icon">📊</div><p>Выберите период</p></div>
+  <%}else{
+    var fL=fmt(from), tL=fmt(to);
+  %>
+
+  <%if(!type||type==='appointments'){%>
+  <div class="card mb-16">
+    <div class="card-header">
+      <div>
+        <h2>Список принятых заявок</h2>
+        <span class="text-muted" style="font-size:12.5px"><%=fL%> — <%=tL%></span>
+      </div>
+      <span class="badge badge-info"><%=appointments.length%></span>
+    </div>
+    <%if(!appointments.length){%>
+    <div class="empty-state"><p>Записей за период нет</p></div>
+    <%}else{%>
+    <table class="table">
+      <thead><tr><th>#</th><th>Пациент</th><th>Телефон</th><th>Специализация</th><th>Врач</th><th>Дата и время</th><th>Статус</th><th>Примечание</th></tr></thead>
+      <tbody>
+        <%appointments.forEach(function(a,i){%>
+        <tr>
+          <td class="text-muted"><%=i+1%></td>
+          <td><strong><%=a.patient_name%></strong></td>
+          <td class="text-muted"><%=a.patient_phone||'—'%></td>
+          <td><%=a.spec_name%></td>
+          <td><%=a.doc_name%></td>
+          <td><%= formatDateTime(a.datetime) %></td>
+          <td><span class="badge badge-<%=a.status==='Принят'?'success':a.status==='Отменён'?'danger':'warning'%>"><%=a.status%></span></td>
+          <td class="text-muted"><%=a.notes||'—'%></td>
+        </tr>
+        <%})%>
+      </tbody>
+      <tfoot><tr><td colspan="8"><strong>Итого: <%=appointments.length%></strong></td></tr></tfoot>
+    </table>
+    <%}%>
+  </div>
+  <%}%>
+
+  <%if(!type||type==='referrals'){
+    var refSum=referrals.reduce(function(s,r){return s+(parseFloat(r.svc_price)||0);},0);
+  %>
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <h2>Отчёт о выданных направлениях на анализ</h2>
+        <span class="text-muted" style="font-size:12.5px"><%=fL%> — <%=tL%></span>
+      </div>
+      <span class="badge badge-info"><%=referrals.length%></span>
+    </div>
+    <%if(!referrals.length){%>
+    <div class="empty-state"><p>Направлений за период нет</p></div>
+    <%}else{%>
+    <table class="table">
+      <thead><tr><th>#</th><th>Пациент</th><th>Анализ / услуга</th><th>Цена, ₽</th><th>Врач</th><th>Дата</th><th>Результат</th></tr></thead>
+      <tbody>
+        <%referrals.forEach(function(r,i){%>
+        <tr>
+          <td class="text-muted"><%=i+1%></td>
+          <td><strong><%=r.patient_name%></strong></td>
+          <td><%=r.svc_name%></td>
+          <td><%=Number(parseFloat(r.svc_price)).toLocaleString('ru')%></td>
+          <td><%=r.doc_name%></td>
+          <td><%= formatDateTime(r.date_assigned) %></td>
+          <td><%=r.result||'<span class="text-muted">Ожидается</span>'%></td>
+        </tr>
+        <%})%>
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="3"><strong>Итого: <%=referrals.length%></strong></td>
+          <td><strong><%=Number(refSum).toLocaleString('ru')%> ₽</strong></td>
+          <td colspan="3"></td>
+        </tr>
+      </tfoot>
+    </table>
+    <%}%>
+  </div>
+  <%}%>
+  <%}%>
+</div>
+<%- include('../partials/footer') %>

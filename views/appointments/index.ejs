@@ -1,0 +1,67 @@
+<%- include('../partials/header',{title:'Записи к врачу',ap:'appointments'}) %>
+
+<% 
+  // Функция для форматирования даты
+  function formatDateTime(dateStr) {
+    if (!dateStr) return '—';
+    
+    // Если дата уже содержит точку (значит это формат из сидера ДД.ММ.ГГГГ), оставляем как есть
+    if (dateStr.includes('.')) return dateStr;
+
+    // Иначе парсим машинный формат (с сайта)
+    const d = new Date(dateStr);
+    if (isNaN(d)) return dateStr; // Если не получилось распарсить, возвращаем оригинал
+
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+
+    // Если есть буква 'T', значит это дата со временем
+    if (dateStr.includes('T')) {
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      return `${day}.${month}.${year} ${hours}:${minutes}`;
+    }
+    
+    // Если просто дата
+    return `${day}.${month}.${year}`;
+  }
+%>
+
+
+<div class="page">
+  <div class="page-header">
+    <h1>Записи к врачу</h1>
+    <%if(user.role!=='doctor'){%><a href="/appointments/new" class="btn btn-primary">+ Новая запись</a><%}%>
+  </div>
+  <div class="card">
+    <%if(!appointments.length){%>
+    <div class="empty-state"><div class="empty-icon">📅</div><p>Записей нет</p></div>
+    <%}else{%>
+    <table class="table">
+      <thead><tr>
+        <th>#</th>
+        <%if(user.role!=='patient'){%><th>Пациент</th><%}%>
+        <th>Специализация</th>
+        <%if(user.role!=='doctor'){%><th>Врач</th><%}%>
+        <th>Дата и время</th><th>Статус</th><th>Примечание</th><th></th>
+      </tr></thead>
+      <tbody>
+        <%appointments.forEach(function(a,i){%>
+        <tr>
+          <td class="text-muted"><%=i+1%></td>
+          <%if(user.role!=='patient'){%><td><strong><%=a.patient_name%></strong></td><%}%>
+          <td><%=a.spec_name%></td>
+          <%if(user.role!=='doctor'){%><td><%=a.doc_name%></td><%}%>
+          <td><%= formatDateTime(a.datetime) %></td>
+          <td><span class="badge badge-<%=a.status==='Принят'?'success':a.status==='Отменён'?'danger':'warning'%>"><%=a.status%></span></td>
+          <td class="text-muted"><%=a.notes||'—'%></td>
+          <td><a href="/appointments/<%=a.id%>" class="btn btn-sm btn-outline">Открыть</a></td>
+        </tr>
+        <%})%>
+      </tbody>
+    </table>
+    <%}%>
+  </div>
+</div>
+<%- include('../partials/footer') %>

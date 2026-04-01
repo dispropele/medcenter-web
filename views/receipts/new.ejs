@@ -1,0 +1,113 @@
+<%- include('../partials/header',{title:'Новая квитанция',ap:''}) %>
+<% 
+  function formatDateTime(dateStr) {
+    if (!dateStr) return '—';
+    if (dateStr.includes('.')) return dateStr;
+    const d = new Date(dateStr);
+    if (isNaN(d)) return dateStr;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    if (dateStr.includes('T')) {
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      return `${day}.${month}.${year} ${hours}:${minutes}`;
+    }
+    return `${day}.${month}.${year}`;
+  }
+%>
+<div class="page page-narrow">
+  <div class="page-header"><h1>Новая квитанция</h1><a href="/receipts" class="btn btn-outline">← Назад</a></div>
+  <div class="card">
+    <%if(error){%><div class="alert alert-error" style="margin:16px 20px 0"><%=error%></div><%}%>
+    <form method="POST" action="/receipts" class="form" id="rcpForm">
+      <div class="form-row">
+        <div class="form-group"><label>Договор *</label>
+          <select name="contract_id" required id="contractSel">
+            <option value="">— Выберите договор —</option>
+            <%contracts.forEach(function(c){%>
+            <option value="<%=c.id%>" <%=form.contract_id==c.id?'selected':''%>>
+              №<%=c.id%> — <%=c.patient_name%> (<%= formatDateTime(c.date) %>)
+            </option>
+            <%})%>
+          </select>
+        </div>
+        <div class="form-group"><label>Дата *</label>
+          <input type="date" name="date" value="<%=new Date().toISOString().slice(0,10)%>" required>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Услуги *</label>
+        <div id="svcList">
+          <div class="svc-row">
+            <select class="svc-select" onchange="fillSvc(this)" style="flex:2">
+              <option value="">— Выбрать из справочника —</option>
+              <%services.forEach(function(s){%>
+              <option value="<%=s.id%>" data-price="<%=s.price%>" data-name="<%=s.name%>"><%=s.name%></option>
+              <%})%>
+            </select>
+            <input type="text"   class="svc-name"  name="svc_name"  placeholder="Наименование" required style="flex:2">
+            <input type="hidden" name="svc_id">
+            <input type="number" name="qty"   value="1" min="1" style="flex:0 0 64px" oninput="calcTotal()" placeholder="Кол">
+            <input type="number" name="price" value="" min="0" step="0.01" style="flex:0 0 100px" oninput="calcTotal()" placeholder="Цена ₽">
+            <button type="button" class="btn btn-sm btn-danger" onclick="rmRow(this)">✕</button>
+          </div>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline" style="margin-top:8px" onclick="addRow()">+ Добавить услугу</button>
+      </div>
+
+      <div class="total-line">
+        <span>Итого:</span>
+        <strong id="totalDisp">0 ₽</strong>
+      </div>
+
+      <div class="form-actions">
+        <a href="/receipts" class="btn btn-outline">Отмена</a>
+        <button class="btn btn-primary">Создать квитанцию</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+// Предзаполнить договор если передан параметр
+(function(){
+  var p=new URLSearchParams(location.search).get('contract_id');
+  if(p){var s=document.getElementById('contractSel');
+    Array.from(s.options).forEach(function(o){if(o.value==p)o.selected=true;});}
+})();
+
+function fillSvc(sel){
+  var row=sel.closest('.svc-row');
+  var opt=sel.selectedOptions[0];
+  if(opt&&opt.dataset.name) row.querySelector('.svc-name').value=opt.dataset.name;
+  if(opt&&opt.dataset.price){row.querySelector('[name="price"]').value=opt.dataset.price;calcTotal();}
+  if(opt&&opt.value) row.querySelector('[name="svc_id"]').value=opt.value;
+}
+function addRow(){
+  var tpl=document.querySelector('.svc-row').cloneNode(true);
+  tpl.querySelector('.svc-select').value='';
+  tpl.querySelector('.svc-name').value='';
+  tpl.querySelector('[name="svc_id"]').value='';
+  tpl.querySelector('[name="qty"]').value='1';
+  tpl.querySelector('[name="price"]').value='';
+  tpl.querySelector('.svc-select').addEventListener('change',function(){fillSvc(this);});
+  document.getElementById('svcList').appendChild(tpl);
+}
+function rmRow(btn){
+  var rows=document.querySelectorAll('.svc-row');
+  if(rows.length>1){btn.closest('.svc-row').remove();calcTotal();}
+}
+function calcTotal(){
+  var total=0;
+  document.querySelectorAll('.svc-row').forEach(function(row){
+    var p=parseFloat(row.querySelector('[name="price"]').value)||0;
+    var q=parseInt(row.querySelector('[name="qty"]').value)||1;
+    total+=p*q;
+  });
+  document.getElementById('totalDisp').textContent=total.toLocaleString('ru')+' ₽';
+}
+document.querySelector('.svc-select').addEventListener('change',function(){fillSvc(this);});
+</script>
+<%- include('../partials/footer') %>

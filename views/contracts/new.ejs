@@ -1,0 +1,29 @@
+<%- include('../partials/header',{title:'Новый договор',ap:''}) %>
+<div class="page page-narrow">
+  <div class="page-header"><h1>Новый договор</h1><a href="/contracts" class="btn btn-outline">← Назад</a></div>
+  <div class="card">
+    <%if(error){%><div class="alert alert-error" style="margin:16px 20px 0"><%=error%></div><%}%>
+    <form method="POST" action="/contracts" class="form">
+      <div class="form-row">
+        <div class="form-group"><label>Пациент *</label>
+          <select name="patient_id" required>
+            <option value="">— Выберите пациента —</option>
+            <%patients.forEach(function(p){%><option value="<%=p.id%>"><%=p.name%></option><%})%>
+          </select>
+        </div>
+        <div class="form-group"><label>Дата подписания *</label>
+          <input type="date" name="date" value="<%=new Date().toISOString().slice(0,10)%>" required>
+        </div>
+      </div>
+      <div class="form-group"><label>Общая стоимость, ₽</label>
+        <input type="number" name="total" value="0" min="0" step="0.01">
+        <span class="form-hint">Будет пересчитана автоматически при добавлении квитанций</span>
+      </div>
+      <div class="form-actions">
+        <a href="/contracts" class="btn btn-outline">Отмена</a>
+        <button class="btn btn-primary">Создать договор</button>
+      </div>
+    </form>
+  </div>
+</div>
+<%- include('../partials/footer') %>

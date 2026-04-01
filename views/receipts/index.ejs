@@ -1,0 +1,42 @@
+<%- include('../partials/header',{title:'Квитанции',ap:''}) %>
+<% 
+  function formatDateTime(dateStr) {
+    if (!dateStr) return '—';
+    if (dateStr.includes('.')) return dateStr;
+    const d = new Date(dateStr);
+    if (isNaN(d)) return dateStr;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    if (dateStr.includes('T')) {
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      return `${day}.${month}.${year} ${hours}:${minutes}`;
+    }
+    return `${day}.${month}.${year}`;
+  }
+%>
+<div class="page">
+  <div class="page-header"><h1>Квитанции</h1><a href="/receipts/new" class="btn btn-primary">+ Новая квитанция</a></div>
+  <div class="card">
+    <%if(!receipts.length){%><div class="empty-state"><div class="empty-icon">🧾</div><p>Квитанций нет</p></div><%}else{%>
+    <table class="table">
+      <thead><tr><th>№</th><th>Пациент</th><th>Дата</th><th>Сумма</th><th>Статус</th><th>Оплачен</th><th></th></tr></thead>
+      <tbody>
+        <%receipts.forEach(function(r){%>
+        <tr>
+          <td class="text-muted"><%=r.id%></td>
+          <td><strong><%=r.patient_name%></strong></td>
+          <td><%= formatDateTime(r.date) %></td>
+          <td><strong><%=Number(r.amount).toLocaleString('ru')%> ₽</strong></td>
+          <td><span class="badge badge-<%=r.status==='Оплачено'?'success':'warning'%>"><%=r.status%></span></td>
+          <td><%=r.paid>0?'✅':'—'%></td>
+          <td><a href="/receipts/<%=r.id%>" class="btn btn-sm btn-outline">Открыть</a></td>
+        </tr>
+        <%})%>
+      </tbody>
+    </table>
+    <%}%>
+  </div>
+</div>
+<%- include('../partials/footer') %>

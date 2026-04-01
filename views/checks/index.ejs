@@ -1,0 +1,54 @@
+<%- include('../partials/header',{title:'Чеки',ap:''}) %>
+<% 
+  function formatDateTime(dateStr) {
+    if (!dateStr) return '—';
+    if (dateStr.includes('.')) return dateStr;
+    const d = new Date(dateStr);
+    if (isNaN(d)) return dateStr;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    if (dateStr.includes('T')) {
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      return `${day}.${month}.${year} ${hours}:${minutes}`;
+    }
+    return `${day}.${month}.${year}`;
+  }
+%>
+<div class="page">
+  <div class="page-header"><h1>Кассовые чеки</h1></div>
+  <div class="card">
+    <%if(!checks.length){%>
+    <div class="empty-state"><div class="empty-icon">🧾</div><p>Чеков нет</p></div>
+    <%}else{%>
+    <table class="table">
+      <thead><tr>
+        <th>Чек №</th><th>Квитанция №</th><th>Пациент</th>
+        <th>Дата</th><th>Способ оплаты</th><th>Сумма</th><th></th>
+      </tr></thead>
+      <tbody>
+        <%checks.forEach(function(c){%>
+        <tr>
+          <td class="text-muted"><strong><%=String(c.id).padStart(3,'0')%></strong></td>
+          <td><a href="/receipts/<%=c.receipt_id%>">№<%=c.receipt_id%></a></td>
+          <td><%=c.patient_name%></td>
+          <td><%= formatDateTime(c.date) %></td>
+          <td><span class="badge badge-info"><%=c.payment_method%></span></td>
+          <td><strong><%=Number(parseFloat(c.amount)).toLocaleString('ru')%> ₽</strong></td>
+          <td><a href="/receipts/<%=c.receipt_id%>" class="btn btn-sm btn-outline">Квитанция</a></td>
+        </tr>
+        <%})%>
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="5"><strong>Итого получено:</strong></td>
+          <td><strong><%=Number(total).toLocaleString('ru')%> ₽</strong></td>
+          <td></td>
+        </tr>
+      </tfoot>
+    </table>
+    <%}%>
+  </div>
+</div>
+<%- include('../partials/footer') %>
