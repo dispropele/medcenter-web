@@ -19,7 +19,7 @@
 <div class="page">
   <div class="page-header">
     <h1>Отчёты</h1>
-    <%if(from&&to&&(appointments.length||referrals.length)){%>
+    <%if(from&&to&&(appointments.length||services.length||issued_referrals.length||doctor_revenue.length)){%>
     <button onclick="window.print()" class="btn btn-outline">🖨 Печать</button>
     <%}%>
   </div>
@@ -38,7 +38,9 @@
             <select name="type">
               <option value="">Все</option>
               <option value="appointments" <%=type==='appointments'?'selected':''%>>Записи к врачу</option>
-              <option value="referrals"    <%=type==='referrals'   ?'selected':''%>>Анализы посещений</option>
+              <option value="services"    <%=type==='services'   ?'selected':''%>>Отчёт об оказанных услугах за период</option>
+              <option value="issued_referrals" <%=type==='issued_referrals'?'selected':''%>>Отчет о выданных направлениях</option>
+              <option value="doctor_revenue" <%=type==='doctor_revenue'?'selected':''%>>Отчёт по загруженности и выручке врачей</option>
             </select>
           </div>
           <div style="padding-bottom:2px">
@@ -89,24 +91,24 @@
   </div>
   <%}%>
 
-  <%if(!type||type==='referrals'){
-    var refSum=referrals.reduce(function(s,r){return s+(parseFloat(r.svc_price)||0);},0);
+  <%if(!type||type==='services'){
+    var servSum=services.reduce(function(s,r){return s+(parseFloat(r.svc_price)||0);},0);
   %>
-  <div class="card">
+  <div class="card mb-16">
     <div class="card-header">
       <div>
-        <h2>Отчёт о выданных направлениях на анализ</h2>
+        <h2>Отчёт об оказанных услугах за период</h2>
         <span class="text-muted" style="font-size:12.5px"><%=fL%> — <%=tL%></span>
       </div>
-      <span class="badge badge-info"><%=referrals.length%></span>
+      <span class="badge badge-info"><%=services.length%></span>
     </div>
-    <%if(!referrals.length){%>
-    <div class="empty-state"><p>Направлений за период нет</p></div>
+    <%if(!services.length){%>
+    <div class="empty-state"><p>Услуг за период нет</p></div>
     <%}else{%>
     <table class="table">
       <thead><tr><th>#</th><th>Пациент</th><th>Анализ / услуга</th><th>Цена, ₽</th><th>Врач</th><th>Дата</th><th>Результат</th></tr></thead>
       <tbody>
-        <%referrals.forEach(function(r,i){%>
+        <%services.forEach(function(r,i){%>
         <tr>
           <td class="text-muted"><%=i+1%></td>
           <td><strong><%=r.patient_name%></strong></td>
@@ -114,18 +116,109 @@
           <td><%=Number(parseFloat(r.svc_price)).toLocaleString('ru')%></td>
           <td><%=r.doc_name%></td>
           <td><%= formatDateTime(r.date_assigned) %></td>
-          <td><%=r.result||'<span class="text-muted">Ожидается</span>'%></td>
+          <td><%-r.result?r.result:'<span class="text-muted">Ожидается</span>'%></td>
         </tr>
         <%})%>
       </tbody>
       <tfoot>
         <tr>
-          <td colspan="3"><strong>Итого: <%=referrals.length%></strong></td>
-          <td><strong><%=Number(refSum).toLocaleString('ru')%> ₽</strong></td>
+          <td colspan="3"><strong>Итого: <%=services.length%></strong></td>
+          <td><strong><%=Number(servSum).toLocaleString('ru')%> ₽</strong></td>
           <td colspan="3"></td>
         </tr>
       </tfoot>
     </table>
+    <%}%>
+  </div>
+  <%}%>
+
+  <%if(!type||type==='issued_referrals'){
+    var refSum=issued_referrals.reduce(function(s,r){return s+(parseFloat(r.svc_price)||0);},0);
+  %>
+  <div class="card mb-16">
+    <div class="card-header">
+      <div>
+        <h2>Отчет о выданных направлениях</h2>
+        <span class="text-muted" style="font-size:12.5px"><%=fL%> — <%=tL%></span>
+      </div>
+      <span class="badge badge-info"><%=issued_referrals.length%></span>
+    </div>
+    <%if(!issued_referrals.length){%>
+    <div class="empty-state"><p>Направлений за период нет</p></div>
+    <%}else{%>
+    <div style="overflow-x:auto">
+    <table class="table">
+      <thead><tr><th>#</th><th>Период с</th><th>Период по</th><th>Дата выдачи</th><th>ФИО пациента</th><th>Наименование анализа</th><th>ФИО врача</th><th>Цена, ₽</th><th>Дата отчета</th></tr></thead>
+      <tbody>
+        <%issued_referrals.forEach(function(r,i){%>
+        <tr>
+          <td class="text-muted"><%=i+1%></td>
+          <td><%=fmt(from)%></td>
+          <td><%=fmt(to)%></td>
+          <td><%= formatDateTime(r.date_assigned) %></td>
+          <td><strong><%=r.patient_name%></strong></td>
+          <td><%=r.svc_name%></td>
+          <td><%=r.doc_name%></td>
+          <td><%=Number(parseFloat(r.svc_price)).toLocaleString('ru')%></td>
+          <td><%= formatDateTime(new Date().toISOString().slice(0,10)) %></td>
+        </tr>
+        <%})%>
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="7"><strong>Итого: <%=issued_referrals.length%></strong></td>
+          <td><strong><%=Number(refSum).toLocaleString('ru')%> ₽</strong></td>
+          <td></td>
+        </tr>
+      </tfoot>
+    </table>
+    </div>
+    <%}%>
+  </div>
+  <%}%>
+
+  <%if(!type||type==='doctor_revenue'){
+    var totVisits=doctor_revenue.reduce(function(s,r){return s+(parseInt(r.visit_count)||0);},0);
+    var totRevenue=doctor_revenue.reduce(function(s,r){return s+(parseFloat(r.total_revenue)||0);},0);
+  %>
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <h2>Отчёт по загруженности и выручке врачей за период</h2>
+        <span class="text-muted" style="font-size:12.5px"><%=fL%> — <%=tL%></span>
+      </div>
+      <span class="badge badge-info"><%=doctor_revenue.length%></span>
+    </div>
+    <%if(!doctor_revenue.length){%>
+    <div class="empty-state"><p>Данных за период нет</p></div>
+    <%}else{%>
+    <div style="overflow-x:auto">
+    <table class="table">
+      <thead><tr><th>#</th><th>Период с</th><th>Период по</th><th>ФИО врача</th><th>Специализация</th><th>Кол-во посещений</th><th>Сумма, ₽</th><th>Дата отчета</th></tr></thead>
+      <tbody>
+        <%doctor_revenue.forEach(function(d,i){%>
+        <tr>
+          <td class="text-muted"><%=i+1%></td>
+          <td><%=fmt(from)%></td>
+          <td><%=fmt(to)%></td>
+          <td><strong><%=d.doc_name%></strong></td>
+          <td><%=d.spec_name%></td>
+          <td><%=parseInt(d.visit_count)||0%></td>
+          <td><%=Number(parseFloat(d.total_revenue)).toLocaleString('ru')%></td>
+          <td><%= formatDateTime(new Date().toISOString().slice(0,10)) %></td>
+        </tr>
+        <%})%>
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="5"><strong>Итого посещений: <%=totVisits%></strong></td>
+          <td colspan="1"></td>
+          <td><strong>Итого выручка: <%=Number(totRevenue).toLocaleString('ru')%> ₽</strong></td>
+          <td></td>
+        </tr>
+      </tfoot>
+    </table>
+    </div>
     <%}%>
   </div>
   <%}%>

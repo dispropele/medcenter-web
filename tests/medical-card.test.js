@@ -78,8 +78,9 @@ describe('Medical Card Tests', () => {
       } else {
         db.prepare("INSERT INTO visits(appointment_id,diagnosis,allergy,updated_at) VALUES(?,?,?,datetime('now','localtime'))")
           .run(req.params.appt_id, diagnosis, allergy);
-        db.prepare("UPDATE appointments SET status='Принят' WHERE id=?").run(req.params.appt_id);
       }
+
+      db.prepare("UPDATE appointments SET status='Принят' WHERE id=?").run(req.params.appt_id);
 
       res.json({ success: true });
     });

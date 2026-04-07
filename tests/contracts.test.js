@@ -51,18 +51,30 @@ describe('Contracts Tests', () => {
     });
 
     app.get('/contracts/new', auth, adminOnly, (req, res) => {
-      const patients = db.prepare("SELECT id,name FROM users WHERE role='patient' ORDER BY name").all();
-      res.json({ patients });
+      const visits = db.prepare(`
+        SELECT v.id, v.appointment_id, a.datetime, u.name patient_name, ud.name doc_name
+        FROM visits v
+        JOIN appointments a ON v.appointment_id=a.id
+        JOIN users u ON a.patient_id=u.id
+        JOIN doctors d ON a.doctor_id=d.id
+        JOIN users ud ON d.user_id=ud.id
+        WHERE NOT EXISTS(SELECT 1 FROM contracts WHERE visit_id=v.id)
+        ORDER BY a.datetime DESC
+      `).all();
+      res.json({ visits });
     });
 
     app.post('/contracts', auth, adminOnly, (req, res) => {
-      const { patient_id, date, total = 0 } = req.body;
+      const { visit_id, date, total = 0 } = req.body;
 
-      if (!patient_id) return res.status(400).json({ error: 'Choose patient' });
+      if (!visit_id) return res.status(400).json({ error: 'Choose visit' });
       if (!date) return res.status(400).json({ error: 'Enter date' });
 
-      const cid = db.prepare('INSERT INTO contracts(patient_id,total,date) VALUES(?,?,?)')
-        .run(patient_id, parseFloat(total) || 0, date).lastInsertRowid;
+      const visit = db.prepare('SELECT v.*, a.patient_id FROM visits v JOIN appointments a ON v.appointment_id=a.id WHERE v.id=?').get(visit_id);
+      if (!visit) return res.status(400).json({ error: 'Visit not found' });
+
+      const cid = db.prepare('INSERT INTO contracts(visit_id,patient_id,total,date) VALUES(?,?,?,?)')
+        .run(visit_id, visit.patient_id, parseFloat(total) || 0, date).lastInsertRowid;
 
       res.json({ success: true, id: cid });
     });
@@ -97,29 +109,29 @@ describe('Contracts Tests', () => {
     expect(Array.isArray(res.body.contracts)).toBe(true);
   });
 
-  test('GET /contracts/new - should return patients list', async () => {
+  test('GET /contracts/new - should return visits list', async () => {
     const res = await adminAgent.get('/contracts/new');
     expect(res.status).toBe(200);
-    expect(Array.isArray(res.body.patients)).toBe(true);
+    expect(Array.isArray(res.body.visits)).toBe(true);
   });
 
-  test('POST /contracts - should fail without patient_id', async () => {
+  test('POST /contracts - should fail without visit_id', async () => {
     const res = await adminAgent.post('/contracts')
       .send({ date: '01.04.2026', total: 1000 });
     expect(res.status).toBe(400);
-    expect(res.body.error).toBe('Choose patient');
+    expect(res.body.error).toBe('Choose visit');
   });
 
   test('POST /contracts - should fail without date', async () => {
     const res = await adminAgent.post('/contracts')
-      .send({ patient_id: 1, total: 1000 });
+      .send({ visit_id: 1, total: 1000 });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('Enter date');
   });
 
   test('POST /contracts - should create new contract', async () => {
     const res = await adminAgent.post('/contracts')
-      .send({ patient_id: 1, date: '01.04.2026', total: 2500 });
+      .send({ visit_id: 1, date: '01.04.2026', total: 2500 });
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.id).toBeDefined();

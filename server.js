@@ -265,21 +265,51 @@ app.get('/contracts', auth, adminOnly, (req,res) => {
 });
 
 app.get('/contracts/new', auth, adminOnly, (req,res) => {
-  const patients = db.prepare("SELECT id,name FROM users WHERE role='patient' ORDER BY name").all();
-  res.render('contracts/new', { patients, error:null, form:{} });
+  const visits = db.prepare(`
+    SELECT v.id, v.appointment_id, a.datetime, up.name patient_name, ud.name doc_name
+    FROM visits v
+    JOIN appointments a ON v.appointment_id=a.id
+    JOIN users up ON a.patient_id=up.id
+    JOIN doctors d ON a.doctor_id=d.id
+    JOIN users ud ON d.user_id=ud.id
+    WHERE NOT EXISTS(SELECT 1 FROM contracts WHERE visit_id=v.id)
+    ORDER BY a.datetime DESC
+  `).all();
+  res.render('contracts/new', { visits, error:null, form:{} });
 });
 
 app.post('/contracts', auth, adminOnly, (req,res) => {
-  const { patient_id, date, total=0 } = req.body;
-  const patients = db.prepare("SELECT id,name FROM users WHERE role='patient' ORDER BY name").all();
-  if (!patient_id) return res.render('contracts/new', { patients, error:'Выберите пациента', form:req.body });
-  if (!date)       return res.render('contracts/new', { patients, error:'Укажите дату', form:req.body });
-  const cid = db.prepare('INSERT INTO contracts(patient_id,total,date) VALUES(?,?,?)').run(patient_id, parseFloat(total)||0, date).lastInsertRowid;
+  const { visit_id, date, total=0 } = req.body;
+  const visits = db.prepare(`
+    SELECT v.id, v.appointment_id, a.datetime, up.name patient_name, ud.name doc_name
+    FROM visits v
+    JOIN appointments a ON v.appointment_id=a.id
+    JOIN users up ON a.patient_id=up.id
+    JOIN doctors d ON a.doctor_id=d.id
+    JOIN users ud ON d.user_id=ud.id
+    WHERE NOT EXISTS(SELECT 1 FROM contracts WHERE visit_id=v.id)
+    ORDER BY a.datetime DESC
+  `).all();
+  if (!visit_id) return res.render('contracts/new', { visits, error:'Выберите посещение', form:req.body });
+  if (!date)     return res.render('contracts/new', { visits, error:'Укажите дату', form:req.body });
+  
+  const visit = db.prepare('SELECT v.*, a.patient_id FROM visits v JOIN appointments a ON v.appointment_id=a.id WHERE v.id=?').get(visit_id);
+  if (!visit) return res.render('contracts/new', { visits, error:'Посещение не найдено', form:req.body });
+  
+  const cid = db.prepare('INSERT INTO contracts(visit_id,patient_id,total,date) VALUES(?,?,?,?)').run(visit_id, visit.patient_id, parseFloat(total)||0, date).lastInsertRowid;
   res.redirect('/contracts/'+cid);
 });
 
 app.get('/contracts/:id', auth, adminOnly, (req,res) => {
-  const contract = db.prepare(`SELECT c.*,u.name patient_name,u.phone,u.dob,u.address FROM contracts c JOIN users u ON c.patient_id=u.id WHERE c.id=?`).get(req.params.id);
+  const contract = db.prepare(`
+    SELECT c.*, v.appointment_id, a.datetime,
+           u.name patient_name, u.phone, u.dob, u.address
+    FROM contracts c
+    JOIN visits v ON c.visit_id=v.id
+    JOIN appointments a ON v.appointment_id=a.id
+    JOIN users u ON c.patient_id=u.id
+    WHERE c.id=?
+  `).get(req.params.id);
   if (!contract) return res.redirect('/contracts');
   const receipts = db.prepare(`
     SELECT r.*, (SELECT COUNT(*) FROM checks WHERE receipt_id=r.id) paid
@@ -304,7 +334,14 @@ app.get('/receipts', auth, adminOnly, (req,res) => {
 });
 
 app.get('/receipts/new', auth, adminOnly, (req,res) => {
-  const contracts = db.prepare(`SELECT c.*,u.name patient_name FROM contracts c JOIN users u ON c.patient_id=u.id ORDER BY c.date DESC`).all();
+  const contracts = db.prepare(`
+    SELECT c.*, u.name patient_name, v.appointment_id, a.datetime
+    FROM contracts c
+    JOIN users u ON c.patient_id=u.id
+    JOIN visits v ON c.visit_id=v.id
+    JOIN appointments a ON v.appointment_id=a.id
+    ORDER BY c.date DESC
+  `).all();
   const services  = db.prepare('SELECT * FROM services ORDER BY name').all();
   res.render('receipts/new', { contracts, services, error:null, form:{} });
 });
@@ -316,7 +353,14 @@ app.post('/receipts', auth, adminOnly, (req,res) => {
   const priceArr = req.body.price     ? (Array.isArray(req.body.price)     ? req.body.price     : [req.body.price])     : [];
   const qtyArr   = req.body.qty       ? (Array.isArray(req.body.qty)       ? req.body.qty       : [req.body.qty])       : [];
 
-  const contracts = db.prepare(`SELECT c.*,u.name patient_name FROM contracts c JOIN users u ON c.patient_id=u.id ORDER BY c.date DESC`).all();
+  const contracts = db.prepare(`
+    SELECT c.*, u.name patient_name, v.appointment_id, a.datetime
+    FROM contracts c
+    JOIN users u ON c.patient_id=u.id
+    JOIN visits v ON c.visit_id=v.id
+    JOIN appointments a ON v.appointment_id=a.id
+    ORDER BY c.date DESC
+  `).all();
   const services  = db.prepare('SELECT * FROM services ORDER BY name').all();
 
   if (!contract_id) return res.render('receipts/new', { contracts, services, error:'Выберите договор', form:req.body });
@@ -428,13 +472,13 @@ app.get('/admin/users', auth, adminOnly, (req,res) => {
 // ══════════════════════════════════════════════════════════════
 app.get('/reports', auth, adminOnly, (req,res) => {
   const { from='', to='', type='' } = req.query;
-  let appointments=[], referrals=[];
+  let appointments=[], services=[], issued_referrals=[], doctor_revenue=[];
 
   if (from && to) {
     const f = from.replace(/-/g,''), t = to.replace(/-/g,'');
     const dconv = `substr(%s,7,4)||substr(%s,4,2)||substr(%s,1,2)`;
     const dcA = dconv.replace(/%s/g,'a.datetime');
-    const dcR = dconv.replace(/%s/g,'va.date_assigned');
+    const dcS = dconv.replace(/%s/g,'va.date_assigned');
 
     if (!type || type==='appointments') {
       appointments = db.prepare(`
@@ -449,8 +493,8 @@ app.get('/reports', auth, adminOnly, (req,res) => {
         ORDER BY ${dcA}
       `).all(f,t);
     }
-    if (!type || type==='referrals') {
-      referrals = db.prepare(`
+    if (!type || type==='services') {
+      services = db.prepare(`
         SELECT va.*, sv.name svc_name, sv.price svc_price,
                up.name patient_name, ud.name doc_name
         FROM visit_analyses va
@@ -460,13 +504,45 @@ app.get('/reports', auth, adminOnly, (req,res) => {
         JOIN users up ON a.patient_id=up.id
         JOIN doctors d ON a.doctor_id=d.id
         JOIN users ud ON d.user_id=ud.id
-        WHERE (${dcR}) >= ? AND (${dcR}) <= ?
-        ORDER BY ${dcR}
+        WHERE (${dcS}) >= ? AND (${dcS}) <= ?
+        ORDER BY ${dcS}
+      `).all(f,t);
+    }
+    if (!type || type==='issued_referrals') {
+      issued_referrals = db.prepare(`
+        SELECT va.*, sv.name svc_name, sv.price svc_price,
+               up.name patient_name, up.id patient_id,
+               ud.name doc_name, ud.id doc_id
+        FROM visit_analyses va
+        JOIN services sv ON va.service_id=sv.id
+        JOIN visits v ON va.visit_id=v.id
+        JOIN appointments a ON v.appointment_id=a.id
+        JOIN users up ON a.patient_id=up.id
+        JOIN doctors d ON a.doctor_id=d.id
+        JOIN users ud ON d.user_id=ud.id
+        WHERE (${dcS}) >= ? AND (${dcS}) <= ?
+        ORDER BY ${dcS}
+      `).all(f,t);
+    }
+    if (!type || type==='doctor_revenue') {
+      doctor_revenue = db.prepare(`
+        SELECT ud.id doc_id, ud.name doc_name, s.name spec_name,
+               COUNT(DISTINCT a.id) visit_count,
+               COALESCE(SUM(r.amount), 0) total_revenue
+        FROM doctors d
+        JOIN users ud ON d.user_id=ud.id
+        JOIN specializations s ON d.spec_id=s.id
+        LEFT JOIN appointments a ON a.doctor_id=d.id AND (substr(a.datetime,7,4)||substr(a.datetime,4,2)||substr(a.datetime,1,2)) >= ? AND (substr(a.datetime,7,4)||substr(a.datetime,4,2)||substr(a.datetime,1,2)) <= ?
+        LEFT JOIN visits v ON v.appointment_id=a.id
+        LEFT JOIN contracts c ON c.visit_id=v.id
+        LEFT JOIN receipts r ON r.contract_id=c.id
+        GROUP BY d.id, ud.name, s.name
+        ORDER BY ud.name
       `).all(f,t);
     }
   }
   const fmt = d => d ? d.split('-').reverse().join('.') : '';
-  res.render('reports/index', { from, to, type, appointments, referrals, fmt });
+  res.render('reports/index', { from, to, type, appointments, services, issued_referrals, doctor_revenue, fmt });
 });
 
 // ══════════════════════════════════════════════════════════════

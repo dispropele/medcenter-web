@@ -110,13 +110,13 @@ module.exports = async function createDb() {
     );
     CREATE TABLE IF NOT EXISTS contracts (
       id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      visit_id   INTEGER NOT NULL REFERENCES visits(id),
       patient_id INTEGER NOT NULL REFERENCES users(id),
       total      REAL NOT NULL DEFAULT 0,
       date       TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS receipts (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
-      visit_id    INTEGER REFERENCES visits(id),
       contract_id INTEGER REFERENCES contracts(id),
       date        TEXT NOT NULL,
       amount      REAL NOT NULL DEFAULT 0,
@@ -223,16 +223,16 @@ module.exports = async function createDb() {
     db.prepare('INSERT INTO visit_analyses(visit_id,service_id,date_assigned,result) VALUES(?,?,?,?)').run(v2, 7,'10.03.2026','Норма');
 
     // Договоры
-    const c1 = db.prepare('INSERT INTO contracts(patient_id,total,date) VALUES(?,?,?)').run(pIds[0],2000,'10.03.2026').lastInsertRowid;
-    const c2 = db.prepare('INSERT INTO contracts(patient_id,total,date) VALUES(?,?,?)').run(pIds[1],5400,'18.03.2026').lastInsertRowid;
-    const c3 = db.prepare('INSERT INTO contracts(patient_id,total,date) VALUES(?,?,?)').run(pIds[2],1100,'12.03.2026').lastInsertRowid;
-    const c4 = db.prepare('INSERT INTO contracts(patient_id,total,date) VALUES(?,?,?)').run(pIds[3],1500,'20.03.2026').lastInsertRowid;
+    const c1 = db.prepare('INSERT INTO contracts(visit_id,patient_id,total,date) VALUES(?,?,?,?)').run(v1,pIds[0],2000,'10.03.2026').lastInsertRowid;
+    const c2 = db.prepare('INSERT INTO contracts(visit_id,patient_id,total,date) VALUES(?,?,?,?)').run(v2,pIds[1],5400,'18.03.2026').lastInsertRowid;
+    const c3 = db.prepare('INSERT INTO contracts(visit_id,patient_id,total,date) VALUES(?,?,?,?)').run(v1,pIds[2],1100,'12.03.2026').lastInsertRowid;
+    const c4 = db.prepare('INSERT INTO contracts(visit_id,patient_id,total,date) VALUES(?,?,?,?)').run(v2,pIds[3],1500,'20.03.2026').lastInsertRowid;
 
     // Квитанции
-    const r1 = db.prepare('INSERT INTO receipts(visit_id,contract_id,date,amount,status) VALUES(?,?,?,?,?)').run(v2,c1,'10.03.2026',2000,'Оплачено').lastInsertRowid;
-    const r2 = db.prepare('INSERT INTO receipts(visit_id,contract_id,date,amount,status) VALUES(?,?,?,?,?)').run(null,c2,'18.03.2026',5400,'Ожидает оплаты').lastInsertRowid;
-    const r3 = db.prepare('INSERT INTO receipts(visit_id,contract_id,date,amount,status) VALUES(?,?,?,?,?)').run(null,c3,'12.03.2026',1100,'Оплачено').lastInsertRowid;
-    const r4 = db.prepare('INSERT INTO receipts(visit_id,contract_id,date,amount,status) VALUES(?,?,?,?,?)').run(null,c4,'20.03.2026',1500,'Оплачено').lastInsertRowid;
+    const r1 = db.prepare('INSERT INTO receipts(contract_id,date,amount,status) VALUES(?,?,?,?)').run(c1,'10.03.2026',2000,'Оплачено').lastInsertRowid;
+    const r2 = db.prepare('INSERT INTO receipts(contract_id,date,amount,status) VALUES(?,?,?,?)').run(c2,'18.03.2026',5400,'Ожидает оплаты').lastInsertRowid;
+    const r3 = db.prepare('INSERT INTO receipts(contract_id,date,amount,status) VALUES(?,?,?,?)').run(c3,'12.03.2026',1100,'Оплачено').lastInsertRowid;
+    const r4 = db.prepare('INSERT INTO receipts(contract_id,date,amount,status) VALUES(?,?,?,?)').run(c4,'20.03.2026',1500,'Оплачено').lastInsertRowid;
 
     // Услуги в квитанциях
     [

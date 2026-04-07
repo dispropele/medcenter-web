@@ -53,7 +53,7 @@ describe('Admin Tests', () => {
       const { name = '' } = req.body;
       const specs = db.prepare('SELECT * FROM specializations ORDER BY name').all();
 
-      if (name.trim().length < 3)
+      if (!name || name.trim().length < 3)
         return res.status(400).json({ error: 'Не менее 3 символов', specs });
 
       try {
@@ -82,7 +82,7 @@ describe('Admin Tests', () => {
       const { name = '', description = '', price = 0 } = req.body;
       const services = db.prepare('SELECT * FROM services ORDER BY name').all();
 
-      if (name.trim().length < 3)
+      if (!name || name.trim().length < 3)
         return res.status(400).json({ error: 'Название не короче 3 символов', services });
 
       try {
@@ -118,7 +118,7 @@ describe('Admin Tests', () => {
     app.post('/admin/analyses', auth, adminOnly, (req, res) => {
       const { name = '', price = 0 } = req.body;
 
-      if (name.trim().length < 3)
+      if (!name || name.trim().length < 3)
         return res.status(400).json({ error: 'Не менее 3 символов' });
 
       try {
@@ -151,12 +151,13 @@ describe('Admin Tests', () => {
     });
 
     test('POST /admin/specializations - should add new specialization', async () => {
+      const uniqueName = 'Specialist_' + Date.now();
       const res = await adminAgent.post('/admin/specializations')
-        .send({ name: 'Новая Специализация' });
+        .send({ name: uniqueName });
       expect(res.status).toBe(200);
-      expect(res.body.success).toContain('Новая Специализация');
+      expect(res.body.success).toContain(uniqueName);
 
-      const spec = db.prepare('SELECT * FROM specializations WHERE name=?').get('Новая Специализация');
+      const spec = db.prepare('SELECT * FROM specializations WHERE name=?').get(uniqueName);
       expect(spec).toBeDefined();
     });
 
@@ -189,12 +190,13 @@ describe('Admin Tests', () => {
     });
 
     test('POST /admin/services - should add new service', async () => {
+      const uniqueName = 'TestService_' + Date.now();
       const res = await adminAgent.post('/admin/services')
-        .send({ name: 'Новая услуга', description: 'Описание', price: 1500 });
+        .send({ name: uniqueName, description: 'Description', price: 1500 });
       expect(res.status).toBe(200);
-      expect(res.body.success).toContain('Новая услуга');
+      expect(res.body.success).toContain(uniqueName);
 
-      const service = db.prepare('SELECT * FROM services WHERE name=?').get('Новая услуга');
+      const service = db.prepare('SELECT * FROM services WHERE name=?').get(uniqueName);
       expect(service).toBeDefined();
       expect(service.price).toBe(1500);
     });
@@ -235,10 +237,11 @@ describe('Admin Tests', () => {
     });
 
     test('POST /admin/analyses - should add new analysis', async () => {
+      const uniqueName = 'BloodTest_' + Date.now();
       const res = await adminAgent.post('/admin/analyses')
-        .send({ name: 'Новый анализ крови', price: 800 });
+        .send({ name: uniqueName, price: 800 });
       expect(res.status).toBe(200);
-      expect(res.body.success).toContain('Новый анализ крови');
+      expect(res.body.success).toContain(uniqueName);
     });
   });
 });
