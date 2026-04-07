@@ -16,138 +16,122 @@
     return `${day}.${month}.${year}`;
   }
 %>
-<div class="page page-narrow">
+<div class="page">
+
   <% if (edit) { %>
-    <div class="page-header"><h1>Редактирование пользователя</h1></div>
+    <!-- ━━━ РЕДАКТИРОВАНИЕ ━━━ -->
+    <div style="background:var(--info-l);border-left:5px solid var(--info);padding:12px 16px;border-radius:7px;margin-bottom:18px">
+      <strong style="color:var(--info)">✏️ Редактирование пользователя</strong>
+    </div>
     <% if (error) { %><div class="alert alert-error"><%=error%></div><% } %>
     <% if (success) { %><div class="alert alert-success"><%=success%></div><% } %>
     
+    <div style="margin-bottom:20px;text-align:right">
+      <a href="/admin/users" class="btn btn-outline">← Вернуться к списку</a>
+    </div>
+
     <div class="card">
-      <div class="card-header">
-        <h2><%=edit.name%></h2>
-        <a href="/admin/users" class="btn btn-outline btn-sm">← Вернуться</a>
-      </div>
+      <div class="card-header"><h2><%=edit.name%></h2></div>
       <form class="form" id="editForm">
-        <div class="form-group">
-          <label>ФИО *</label>
-          <input type="text" name="name" value="<%=form.name||''%>" required>
-        </div>
-        <div class="form-group">
-          <label>Email *</label>
-          <input type="email" name="email" value="<%=form.email||''%>" required>
+        <div class="form-group"><label>ФИО *</label><input type="text" name="name" value="<%=form.name||''%>" required></div>
+        <div class="form-group"><label>Email *</label><input type="email" name="email" value="<%=form.email||''%>" required></div>
+        <div class="form-row">
+          <div class="form-group"><label>Телефон</label><input type="text" name="phone" value="<%=form.phone||''%>" maxlength="18" class="phone-input"></div>
+          <div class="form-group"><label>Дата рождения</label><input type="text" name="dob" value="<%=form.dob||''%>" maxlength="10" class="dob-input"></div>
         </div>
         <div class="form-row">
-          <div class="form-group">
-            <label>Телефон</label>
-            <input type="text" name="phone" value="<%=form.phone||''%>" maxlength="18" id="phone">
+          <div class="form-group"><label>Пол</label>
+            <select name="gender"><option value="">—</option><option <%=form.gender==='М'?'selected':''%>>М</option><option <%=form.gender==='Ж'?'selected':''%>>Ж</option></select>
           </div>
-          <div class="form-group">
-            <label>Дата рождения</label>
-            <input type="text" name="dob" value="<%=form.dob||''%>" maxlength="10" id="dob">
+          <div class="form-group"><label>Роль</label>
+            <select name="role" required><option value="patient" <%=form.role==='patient'?'selected':''%>>Пациент</option><option value="doctor" <%=form.role==='doctor'?'selected':''%>>Врач</option><option value="admin" <%=form.role==='admin'?'selected':''%>>Администратор</option></select>
           </div>
         </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Пол</label>
-            <select name="gender">
-              <option value="">—</option>
-              <option <%=form.gender==='М'?'selected':''%>>М</option>
-              <option <%=form.gender==='Ж'?'selected':''%>>Ж</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Роль</label>
-            <select name="role" required>
-              <option value="patient" <%=form.role==='patient'?'selected':''%>>Пациент</option>
-              <option value="doctor" <%=form.role==='doctor'?'selected':''%>>Врач</option>
-              <option value="admin" <%=form.role==='admin'?'selected':''%>>Администратор</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Адрес</label>
-          <input type="text" name="address" value="<%=form.address||''%>">
-        </div>
-        <div class="form-group">
-          <label>Новый пароль (оставить пустым, если не менять)</label>
-          <input type="password" name="password">
-        </div>
-        <div class="form-group">
-          <label>Подтверждение пароля</label>
-          <input type="password" name="confirm">
-        </div>
-        <div class="form-actions">
-          <a href="/admin/users" class="btn btn-outline">Отмена</a>
-          <button type="submit" class="btn btn-primary">Сохранить</button>
-        </div>
+        <div class="form-group"><label>Адрес</label><input type="text" name="address" value="<%=form.address||''%>"></div>
+        <div class="form-group"><label>Новый пароль (оставить пустым, чтобы не менять)</label><input type="password" name="password" placeholder="••••••••"></div>
+        <div class="form-group"><label>Подтверждение пароля</label><input type="password" name="confirm" placeholder="••••••••"></div>
+        <div class="form-actions"><a href="/admin/users" class="btn btn-outline">Отмена</a><button type="submit" class="btn btn-primary">Сохранить</button></div>
       </form>
     </div>
-    
+
     <script>
       document.getElementById('editForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const formData = new FormData(e.target);
         const data = Object.fromEntries(formData);
-        const res = await fetch('/admin/users/<%=edit.id%>', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data)
-        });
+        const res = await fetch('/admin/users/<%=edit.id%>', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
         const result = await res.json();
         if (!res.ok) return alert(result.error);
-        alert(result.success);
         window.location.href = '/admin/users';
       });
-      
-      document.getElementById('phone').addEventListener('input', function() {
-        var v = this.value.replace(/\D/g, '');
-        if (v.startsWith('8')) v = '7' + v.slice(1);
-        if (!v.startsWith('7')) v = '7' + v;
-        v = v.slice(0, 11);
-        var r = '+7';
-        if (v.length > 1) r += ' (' + v.slice(1, 4);
-        if (v.length >= 4) r += ') ' + v.slice(4, 7);
-        if (v.length >= 7) r += '-' + v.slice(7, 9);
-        if (v.length >= 9) r += '-' + v.slice(9, 11);
-        this.value = r;
-      });
-      document.getElementById('dob').addEventListener('input', function() {
-        var v = this.value.replace(/\D/g, '').slice(0, 8), r = v;
-        if (v.length > 2) r = v.slice(0, 2) + '.' + v.slice(2);
-        if (v.length > 4) r = v.slice(0, 2) + '.' + v.slice(2, 4) + '.' + v.slice(4);
-        this.value = r;
-      });
+      setupPhoneAndDob();
     </script>
+
+  <% } else if (isNew) { %>
+    <!-- ━━━ ДОБАВЛЕНИЕ ━━━ -->
+    <div style="background:var(--success-l);border-left:5px solid var(--success);padding:12px 16px;border-radius:7px;margin-bottom:18px">
+      <strong style="color:var(--success)">➕ Добавление пользователя</strong>
+    </div>
+    <% if (error) { %><div class="alert alert-error"><%=error%></div><% } %>
+    <% if (success) { %><div class="alert alert-success"><%=success%></div><% } %>
+    
+    <div style="margin-bottom:20px;text-align:right">
+      <a href="/admin/users" class="btn btn-outline">← Вернуться к списку</a>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h2>Новый пользователь</h2></div>
+      <form class="form" method="POST" action="/admin/users">
+        <div class="form-group"><label>ФИО *</label><input type="text" name="name" value="<%=form.name||''%>" required autofocus></div>
+        <div class="form-group"><label>Email *</label><input type="email" name="email" value="<%=form.email||''%>" required></div>
+        <div class="form-row">
+          <div class="form-group"><label>Телефон</label><input type="text" name="phone" value="<%=form.phone||''%>" maxlength="18" class="phone-input"></div>
+          <div class="form-group"><label>Дата рождения</label><input type="text" name="dob" value="<%=form.dob||''%>" maxlength="10" class="dob-input" placeholder="ДД.МММ.ГГГГ"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Пол</label>
+            <select name="gender"><option value="">—</option><option <%=form.gender==='М'?'selected':''%>>М</option><option <%=form.gender==='Ж'?'selected':''%>>Ж</option></select>
+          </div>
+          <div class="form-group"><label>Роль</label>
+            <select name="role" required><option value="patient" <%=(form.role||'patient')==='patient'?'selected':''%>>Пациент</option><option value="doctor" <%=form.role==='doctor'?'selected':''%>>Врач</option><option value="admin" <%=form.role==='admin'?'selected':''%>>Администратор</option></select>
+          </div>
+        </div>
+        <div class="form-group"><label>Адрес</label><input type="text" name="address" value="<%=form.address||''%>"></div>
+        <div class="form-group"><label>Пароль * (не менее 6 символов)</label><input type="password" name="password" placeholder="••••••••" required></div>
+        <div class="form-group"><label>Подтверждение пароля *</label><input type="password" name="confirm" placeholder="••••••••" required></div>
+        <div class="form-actions"><a href="/admin/users" class="btn btn-outline">Отмена</a><button type="submit" class="btn btn-primary">Создать</button></div>
+      </form>
+    </div>
+    
+    <script>setupPhoneAndDob();</script>
+
   <% } else { %>
+    <!-- ━━━ СПИСОК ━━━ -->
     <div class="page-header">
-      <h1>Пользователи системы</h1>
+      <h1>👥 Пользователи системы</h1>
       <span class="badge badge-info"><%=users.length%></span>
-      <a href="/admin/users/new" class="btn btn-primary btn-sm" style="margin-left:auto">+ Добавить пользователя</a>
+      <a href="/admin/users/new" class="btn btn-primary" style="margin-left:auto">➕ Добавить</a>
     </div>
     <% if (error) { %><div class="alert alert-error" style="margin-bottom:14px"><%=error%></div><% } %>
     <% if (success) { %><div class="alert alert-success" style="margin-bottom:14px"><%=success%></div><% } %>
     
     <div class="card">
       <table class="table">
-        <thead><tr><th>#</th><th>ФИО</th><th>Email</th><th>Телефон</th><th>Дата рождения</th><th>Роль</th><th style="width:100px;text-align:center">Действия</th></tr></thead>
+        <thead><tr><th style="width:40px">#</th><th>ФИО</th><th>Email</th><th style="width:140px">Телефон</th><th style="width:100px">Дата р.</th><th style="width:100px">Роль</th><th style="width:88px;text-align:center">Действия</th></tr></thead>
         <tbody>
-          <%users.forEach(function(u,i){%>
+          <%users.forEach(function(u){%>
           <tr>
-            <td class="text-muted"><%=u.id%></td>
+            <td class="text-muted" style="font-size:11px"><%=u.id%></td>
             <td><strong><%=u.name%></strong></td>
-            <td class="text-muted"><%=u.email%></td>
-            <td><%=u.phone||'—'%></td>
-            <td><%= formatDateTime(u.dob) %></td>
-            <td><span class="badge badge-<%=u.role==='admin'?'danger':u.role==='doctor'?'info':'success'%>">
-              <%=u.role==='admin'?'Администратор':u.role==='doctor'?'Врач':'Пациент'%>
-            </span></td>
-            <td style="text-align:center">
-              <form style="display:inline;margin:0" id="delForm<%=u.id%>">
-                <a href="/admin/users/<%=u.id%>/edit" class="btn btn-outline btn-sm" style="font-size:12px;padding:3px 8px">Редакт.</a>
-                <% if (user.id !== u.id) { %>
-                  <button type="button" class="btn btn-danger btn-sm" style="font-size:12px;padding:3px 8px" onclick="deleteUser(<%=u.id%>,event)">Удалить</button>
-                <% } %>
-              </form>
+            <td class="text-muted" style="font-size:12px"><%=u.email%></td>
+            <td style="font-size:12px"><%=u.phone||'—'%></td>
+            <td style="font-size:12px"><%= formatDateTime(u.dob) %></td>
+            <td><span class="badge badge-<%=u.role==='admin'?'danger':u.role==='doctor'?'info':'success'%>"><%=u.role==='admin'?'Адм':u.role==='doctor'?'Врач':'Пац'%></span></td>
+            <td style="text-align:center;display:flex;gap:4px;justify-content:center;flex-wrap:wrap">
+              <a href="/admin/users/<%=u.id%>/edit" class="btn btn-outline btn-sm" style="padding:4px 8px;font-size:12px" title="Редактировать">✏️</a>
+              <% if (user.id !== u.id) { %>
+                <button type="button" class="btn btn-danger btn-sm" style="padding:4px 8px;font-size:12px" onclick="deleteUser(<%=u.id%>)" title="Удалить">✕</button>
+              <% } %>
             </td>
           </tr>
           <%})%>
@@ -155,20 +139,47 @@
       </table>
     </div>
     
-    <div style="margin-top:18px;padding:14px;background:var(--primary-l);border-radius:7px">
-      <strong style="color:var(--primary)">Форма добавления:</strong> нажмите кнопку «+ Добавить пользователя» выше
-    </div>
-    
     <script>
-      async function deleteUser(id, e) {
-        if (!confirm('Вы уверены?')) return;
+      async function deleteUser(id) {
+        if (!confirm('Удалить пользователя?')) return;
         const res = await fetch('/admin/users/' + id, { method: 'DELETE' });
         const result = await res.json();
         if (!res.ok) return alert(result.error);
-        alert(result.success);
         window.location.reload();
       }
     </script>
+
   <% } %>
+
 </div>
+
+<script>
+function setupPhoneAndDob() {
+  document.querySelectorAll('.phone-input').forEach(input => {
+    input.addEventListener('input', function() {
+      var v = this.value.replace(/\D/g, '');
+      if (v.startsWith('8')) v = '7' + v.slice(1);
+      if (!v.startsWith('7')) v = '7' + v;
+      v = v.slice(0, 11);
+      var r = '+7';
+      if (v.length > 1) r += ' (' + v.slice(1, 4);
+      if (v.length >= 4) r += ') ' + v.slice(4, 7);
+      if (v.length >= 7) r += '-' + v.slice(7, 9);
+      if (v.length >= 9) r += '-' + v.slice(9, 11);
+      this.value = r;
+    });
+  });
+  
+  document.querySelectorAll('.dob-input').forEach(input => {
+    input.addEventListener('input', function() {
+      var v = this.value.replace(/\D/g, '').slice(0, 8), r = v;
+      if (v.length > 2) r = v.slice(0, 2) + '.' + v.slice(2);
+      if (v.length > 4) r = v.slice(0, 2) + '.' + v.slice(2, 4) + '.' + v.slice(4);
+      this.value = r;
+    });
+  });
+}
+document.addEventListener('DOMContentLoaded', setupPhoneAndDob);
+</script>
+
 <%- include('../partials/footer') %>

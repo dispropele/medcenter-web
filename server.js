@@ -444,6 +444,8 @@ app.get('/admin/users', auth, adminOnly, (req,res) => {
   res.render('admin/users', { 
     users: db.prepare('SELECT * FROM users ORDER BY role,name').all(),
     edit: null,
+    isNew: false,
+    form: {},
     error: null,
     success: null
   });
@@ -453,7 +455,8 @@ app.get('/admin/users/new', auth, adminOnly, (req,res) => {
   res.render('admin/users', { 
     users: db.prepare('SELECT * FROM users ORDER BY role,name').all(),
     edit: null,
-    form: {},
+    form: { role: 'patient' },
+    isNew: true,
     error: null,
     success: null
   });
@@ -466,6 +469,7 @@ app.get('/admin/users/:id/edit', auth, adminOnly, (req,res) => {
     users: db.prepare('SELECT * FROM users ORDER BY role,name').all(),
     edit,
     form: edit,
+    isNew: false,
     error: null,
     success: null
   });
@@ -475,15 +479,15 @@ app.post('/admin/users', auth, adminOnly, (req,res) => {
   const { name='', email='', password='', confirm='', role='patient', phone='', dob='', gender='', address='' } = req.body;
   const users = db.prepare('SELECT * FROM users ORDER BY role,name').all();
   
-  if (!name.trim()) return res.render('admin/users', { users, edit:null, form:req.body, error:'Введите ФИО', success:null });
-  if (name.trim().length < 3) return res.render('admin/users', { users, edit:null, form:req.body, error:'ФИО не короче 3 символов', success:null });
-  if (!/^[^@]+@[^@]+\.[^@]+$/.test(email)) return res.render('admin/users', { users, edit:null, form:req.body, error:'Некорректный email', success:null });
-  if (password.length < 6) return res.render('admin/users', { users, edit:null, form:req.body, error:'Пароль не короче 6 символов', success:null });
-  if (password !== confirm) return res.render('admin/users', { users, edit:null, form:req.body, error:'Пароли не совпадают', success:null });
+  if (!name.trim()) return res.render('admin/users', { users, edit:null, form:req.body, isNew:true, error:'Введите ФИО', success:null });
+  if (name.trim().length < 3) return res.render('admin/users', { users, edit:null, form:req.body, isNew:true, error:'ФИО не короче 3 символов', success:null });
+  if (!/^[^@]+@[^@]+\.[^@]+$/.test(email)) return res.render('admin/users', { users, edit:null, form:req.body, isNew:true, error:'Некорректный email', success:null });
+  if (password.length < 6) return res.render('admin/users', { users, edit:null, form:req.body, isNew:true, error:'Пароль не короче 6 символов', success:null });
+  if (password !== confirm) return res.render('admin/users', { users, edit:null, form:req.body, isNew:true, error:'Пароли не совпадают', success:null });
   
   try {
     if (db.prepare('SELECT id FROM users WHERE email=?').get(email.toLowerCase())) 
-      return res.render('admin/users', { users, edit:null, form:req.body, error:'Email уже занят', success:null });
+      return res.render('admin/users', { users, edit:null, form:req.body, isNew:true, error:'Email уже занят', success:null });
     
     db.prepare('INSERT INTO users(name,email,password,role,phone,dob,gender,address) VALUES(?,?,?,?,?,?,?,?)')
       .run(name.trim(), email.toLowerCase(), password, role, phone, dob, gender, address);
@@ -491,12 +495,13 @@ app.post('/admin/users', auth, adminOnly, (req,res) => {
     res.render('admin/users', { 
       users: db.prepare('SELECT * FROM users ORDER BY role,name').all(),
       edit: null,
-      form: {},
+      form: { role: 'patient' },
+      isNew: true,
       error: null,
       success: `Пользователь «${name.trim()}» добавлен`
     });
   } catch (e) {
-    res.render('admin/users', { users, edit:null, form:req.body, error:'Ошибка при добавлении пользователя', success:null });
+    res.render('admin/users', { users, edit:null, form:req.body, isNew:true, error:'Ошибка при добавлении пользователя', success:null });
   }
 });
 
