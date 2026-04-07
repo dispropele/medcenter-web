@@ -22,10 +22,10 @@
     <%if(error){%><div class="alert alert-error" style="margin:16px 20px 0"><%=error%></div><%}%>
     <form method="POST" action="/contracts" class="form">
       <div class="form-row">
-        <div class="form-group"><label>Посещение *</label>
-          <select name="visit_id" required>
-            <option value="">— Выберите посещение —</option>
-            <%visits.forEach(function(v){%><option value="<%=v.id%>"><%=v.patient_name%> - <%=v.doc_name%> - <%= formatDateTime(v.datetime) %></option><%})%>
+        <div class="form-group"><label>Пациент *</label>
+          <select name="patient_id" required>
+            <option value="">— Выберите пациента —</option>
+            <%patients.forEach(function(p){%><option value="<%=p.id%>"><%=p.name%></option><%})%>
           </select>
         </div>
         <div class="form-group"><label>Дата подписания *</label>

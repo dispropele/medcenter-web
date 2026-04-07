@@ -33,7 +33,6 @@
           <dt>Телефон</dt><dd><%=contract.phone||'—'%></dd>
           <dt>Дата рождения</dt><dd><%= formatDateTime(contract.dob) %></dd>
           <%if(contract.address){%><dt>Адрес</dt><dd><%=contract.address%></dd><%}%>
-          <dt>Дата посещения</dt><dd><%= formatDateTime(contract.datetime) %></dd>
           <dt>Дата договора</dt><dd><%= formatDateTime(contract.date) %></dd>
           <dt>Общая стоимость</dt><dd><strong><%=Number(contract.total).toLocaleString('ru')%> ₽</strong></dd>
         </dl>

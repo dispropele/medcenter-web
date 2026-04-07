@@ -265,48 +265,24 @@ app.get('/contracts', auth, adminOnly, (req,res) => {
 });
 
 app.get('/contracts/new', auth, adminOnly, (req,res) => {
-  const visits = db.prepare(`
-    SELECT v.id, v.appointment_id, a.datetime, up.name patient_name, ud.name doc_name
-    FROM visits v
-    JOIN appointments a ON v.appointment_id=a.id
-    JOIN users up ON a.patient_id=up.id
-    JOIN doctors d ON a.doctor_id=d.id
-    JOIN users ud ON d.user_id=ud.id
-    WHERE NOT EXISTS(SELECT 1 FROM contracts WHERE visit_id=v.id)
-    ORDER BY a.datetime DESC
-  `).all();
-  res.render('contracts/new', { visits, error:null, form:{} });
+  const patients = db.prepare("SELECT id,name FROM users WHERE role='patient' ORDER BY name").all();
+  res.render('contracts/new', { patients, error:null, form:{} });
 });
 
 app.post('/contracts', auth, adminOnly, (req,res) => {
-  const { visit_id, date, total=0 } = req.body;
-  const visits = db.prepare(`
-    SELECT v.id, v.appointment_id, a.datetime, up.name patient_name, ud.name doc_name
-    FROM visits v
-    JOIN appointments a ON v.appointment_id=a.id
-    JOIN users up ON a.patient_id=up.id
-    JOIN doctors d ON a.doctor_id=d.id
-    JOIN users ud ON d.user_id=ud.id
-    WHERE NOT EXISTS(SELECT 1 FROM contracts WHERE visit_id=v.id)
-    ORDER BY a.datetime DESC
-  `).all();
-  if (!visit_id) return res.render('contracts/new', { visits, error:'Выберите посещение', form:req.body });
-  if (!date)     return res.render('contracts/new', { visits, error:'Укажите дату', form:req.body });
+  const { patient_id, date, total=0 } = req.body;
+  const patients = db.prepare("SELECT id,name FROM users WHERE role='patient' ORDER BY name").all();
+  if (!patient_id) return res.render('contracts/new', { patients, error:'Выберите пациента', form:req.body });
+  if (!date)       return res.render('contracts/new', { patients, error:'Укажите дату', form:req.body });
   
-  const visit = db.prepare('SELECT v.*, a.patient_id FROM visits v JOIN appointments a ON v.appointment_id=a.id WHERE v.id=?').get(visit_id);
-  if (!visit) return res.render('contracts/new', { visits, error:'Посещение не найдено', form:req.body });
-  
-  const cid = db.prepare('INSERT INTO contracts(visit_id,patient_id,total,date) VALUES(?,?,?,?)').run(visit_id, visit.patient_id, parseFloat(total)||0, date).lastInsertRowid;
+  const cid = db.prepare('INSERT INTO contracts(patient_id,total,date) VALUES(?,?,?)').run(patient_id, parseFloat(total)||0, date).lastInsertRowid;
   res.redirect('/contracts/'+cid);
 });
 
 app.get('/contracts/:id', auth, adminOnly, (req,res) => {
   const contract = db.prepare(`
-    SELECT c.*, v.appointment_id, a.datetime,
-           u.name patient_name, u.phone, u.dob, u.address
+    SELECT c.*, u.name patient_name, u.phone, u.dob, u.address
     FROM contracts c
-    JOIN visits v ON c.visit_id=v.id
-    JOIN appointments a ON v.appointment_id=a.id
     JOIN users u ON c.patient_id=u.id
     WHERE c.id=?
   `).get(req.params.id);
@@ -335,11 +311,9 @@ app.get('/receipts', auth, adminOnly, (req,res) => {
 
 app.get('/receipts/new', auth, adminOnly, (req,res) => {
   const contracts = db.prepare(`
-    SELECT c.*, u.name patient_name, v.appointment_id, a.datetime
+    SELECT c.*, u.name patient_name
     FROM contracts c
     JOIN users u ON c.patient_id=u.id
-    JOIN visits v ON c.visit_id=v.id
-    JOIN appointments a ON v.appointment_id=a.id
     ORDER BY c.date DESC
   `).all();
   const services  = db.prepare('SELECT * FROM services ORDER BY name').all();
@@ -354,11 +328,9 @@ app.post('/receipts', auth, adminOnly, (req,res) => {
   const qtyArr   = req.body.qty       ? (Array.isArray(req.body.qty)       ? req.body.qty       : [req.body.qty])       : [];
 
   const contracts = db.prepare(`
-    SELECT c.*, u.name patient_name, v.appointment_id, a.datetime
+    SELECT c.*, u.name patient_name
     FROM contracts c
     JOIN users u ON c.patient_id=u.id
-    JOIN visits v ON c.visit_id=v.id
-    JOIN appointments a ON v.appointment_id=a.id
     ORDER BY c.date DESC
   `).all();
   const services  = db.prepare('SELECT * FROM services ORDER BY name').all();
@@ -367,6 +339,10 @@ app.post('/receipts', auth, adminOnly, (req,res) => {
   if (!date)        return res.render('receipts/new', { contracts, services, error:'Укажите дату', form:req.body });
   const validIdx = nameArr.map((n,i)=>i).filter(i => nameArr[i] && nameArr[i].trim());
   if (!validIdx.length) return res.render('receipts/new', { contracts, services, error:'Добавьте хотя бы одну услугу', form:req.body });
+  
+  // Проверка что все услуги имеют ненулевую стоимость
+  const zeroPrice = validIdx.find(i => !priceArr[i] || parseFloat(priceArr[i]) === 0);
+  if (zeroPrice !== undefined) return res.render('receipts/new', { contracts, services, error:'Все услуги должны иметь стоимость больше нуля', form:req.body });
 
   const total = validIdx.reduce((s,i) => s + (parseFloat(priceArr[i])||0) * (parseInt(qtyArr[i])||1), 0);
   const rid = db.prepare('INSERT INTO receipts(contract_id,date,amount,status) VALUES(?,?,?,?)').run(contract_id,date,total,'Ожидает оплаты').lastInsertRowid;
@@ -433,6 +409,7 @@ app.get('/admin/specializations', auth, adminOnly, (req,res) => {
 app.post('/admin/specializations', auth, adminOnly, (req,res) => {
   const { name='' } = req.body;
   const specs = db.prepare('SELECT * FROM specializations ORDER BY name').all();
+  if (!name.trim()) return res.render('admin/specializations', { specs, error:'Не введено наименование специализации', success:null });
   if (name.trim().length < 3) return res.render('admin/specializations', { specs, error:'Не менее 3 символов', success:null });
   try {
     db.prepare('INSERT INTO specializations(name) VALUES(?)').run(name.trim());
