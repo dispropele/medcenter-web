@@ -106,6 +106,72 @@ describe('Admin Tests', () => {
       });
     });
 
+    app.post('/admin/users', auth, adminOnly, (req, res) => {
+      const { name = '', email = '', password = '', confirm = '', role = 'patient', phone = '', dob = '', gender = '', address = '' } = req.body;
+      const users = db.prepare('SELECT * FROM users ORDER BY role,name').all();
+
+      if (!name.trim()) return res.status(400).json({ error: 'Введите ФИО' });
+      if (name.trim().length < 3) return res.status(400).json({ error: 'ФИО не короче 3 символов' });
+      if (!/^[^@]+@[^@]+\.[^@]+$/.test(email)) return res.status(400).json({ error: 'Некорректный email' });
+      if (password.length < 6) return res.status(400).json({ error: 'Пароль не короче 6 символов' });
+      if (password !== confirm) return res.status(400).json({ error: 'Пароли не совпадают' });
+
+      if (db.prepare('SELECT id FROM users WHERE email=?').get(email.toLowerCase()))
+        return res.status(400).json({ error: 'Email уже занят' });
+
+      try {
+        db.prepare('INSERT INTO users(name,email,password,role,phone,dob,gender,address) VALUES(?,?,?,?,?,?,?,?)')
+          .run(name.trim(), email.toLowerCase(), password, role, phone, dob, gender, address);
+        res.json({ success: `Пользователь «${name.trim()}» добавлен` });
+      } catch (e) {
+        res.status(400).json({ error: 'Ошибка при добавлении пользователя' });
+      }
+    });
+
+    app.put('/admin/users/:id', auth, adminOnly, (req, res) => {
+      const { name = '', email = '', password = '', confirm = '', role = 'patient', phone = '', dob = '', gender = '', address = '' } = req.body;
+      const existing = db.prepare('SELECT * FROM users WHERE id=?').get(req.params.id);
+      if (!existing) return res.status(404).json({ error: 'Пользователь не найден' });
+
+      if (!name.trim()) return res.status(400).json({ error: 'Введите ФИО' });
+      if (name.trim().length < 3) return res.status(400).json({ error: 'ФИО не короче 3 символов' });
+      if (!/^[^@]+@[^@]+\.[^@]+$/.test(email)) return res.status(400).json({ error: 'Некорректный email' });
+
+      let finalPassword = existing.password;
+      if (password) {
+        if (password.length < 6) return res.status(400).json({ error: 'Пароль не короче 6 символов' });
+        if (password !== confirm) return res.status(400).json({ error: 'Пароли не совпадают' });
+        finalPassword = password;
+      }
+
+      if (email.toLowerCase() !== existing.email.toLowerCase()) {
+        if (db.prepare('SELECT id FROM users WHERE email=?').get(email.toLowerCase()))
+          return res.status(400).json({ error: 'Email уже занят' });
+      }
+
+      try {
+        db.prepare('UPDATE users SET name=?, email=?, password=?, role=?, phone=?, dob=?, gender=?, address=? WHERE id=?')
+          .run(name.trim(), email.toLowerCase(), finalPassword, role, phone, dob, gender, address, req.params.id);
+        res.json({ success: `Пользователь «${name.trim()}» обновлен` });
+      } catch (e) {
+        res.status(400).json({ error: 'Ошибка при обновлении пользователя' });
+      }
+    });
+
+    app.delete('/admin/users/:id', auth, adminOnly, (req, res) => {
+      const user = db.prepare('SELECT * FROM users WHERE id=?').get(req.params.id);
+      if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+      if (req.session.user.id === parseInt(req.params.id))
+        return res.status(400).json({ error: 'Вы не можете удалить свой аккаунт' });
+
+      try {
+        db.prepare('DELETE FROM users WHERE id=?').run(req.params.id);
+        res.json({ success: `Пользователь «${user.name}» удален` });
+      } catch (e) {
+        res.status(400).json({ error: 'Ошибка при удалении пользователя' });
+      }
+    });
+
     // Analyses
     app.get('/admin/analyses', auth, adminOnly, (req, res) => {
       res.json({
@@ -226,6 +292,140 @@ describe('Admin Tests', () => {
       const roles = res.body.users.map(u => u.role);
       expect(roles).toContain('admin');
       expect(roles).toContain('patient');
+    });
+
+    test('POST /admin/users - should fail with short name', async () => {
+      const res = await adminAgent.post('/admin/users')
+        .send({ name: 'ab', email: 'test@test.com', password: 'pass123', confirm: 'pass123' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('ФИО');
+    });
+
+    test('POST /admin/users - should fail with invalid email', async () => {
+      const res = await adminAgent.post('/admin/users')
+        .send({ name: 'Test User', email: 'invalid-email', password: 'pass123', confirm: 'pass123' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('Некорректный email');
+    });
+
+    test('POST /admin/users - should fail with short password', async () => {
+      const res = await adminAgent.post('/admin/users')
+        .send({ name: 'Test User', email: 'test@test.com', password: 'pass', confirm: 'pass' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('Пароль');
+    });
+
+    test('POST /admin/users - should fail with mismatched passwords', async () => {
+      const res = await adminAgent.post('/admin/users')
+        .send({ name: 'Test User', email: 'test@test.com', password: 'pass123', confirm: 'pass456' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('Пароли не совпадают');
+    });
+
+    test('POST /admin/users - should add new user successfully', async () => {
+      const uniqueEmail = 'newuser_' + Date.now() + '@test.com';
+      const res = await adminAgent.post('/admin/users')
+        .send({ name: 'New Test User', email: uniqueEmail, password: 'testpass123', confirm: 'testpass123', role: 'patient' });
+      expect(res.status).toBe(200);
+      expect(res.body.success).toContain('добавлен');
+
+      const user = db.prepare('SELECT * FROM users WHERE email=?').get(uniqueEmail.toLowerCase());
+      expect(user).toBeDefined();
+      expect(user.name).toBe('New Test User');
+      expect(user.role).toBe('patient');
+    });
+
+    test('POST /admin/users - should fail with duplicate email', async () => {
+      const uniqueEmail = 'dupuser_' + Date.now() + '@test.com';
+      // First user
+      await adminAgent.post('/admin/users')
+        .send({ name: 'User One', email: uniqueEmail, password: 'testpass123', confirm: 'testpass123' });
+
+      // Second user with same email
+      const res = await adminAgent.post('/admin/users')
+        .send({ name: 'User Two', email: uniqueEmail, password: 'testpass123', confirm: 'testpass123' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('Email уже занят');
+    });
+
+    test('PUT /admin/users/:id - should update user successfully', async () => {
+      const uniqueEmail = 'updateuser_' + Date.now() + '@test.com';
+      const createRes = await adminAgent.post('/admin/users')
+        .send({ name: 'Original Name', email: uniqueEmail, password: 'testpass123', confirm: 'testpass123', phone: '+7 (999) 000-00-00' });
+
+      const user = db.prepare('SELECT * FROM users WHERE email=?').get(uniqueEmail.toLowerCase());
+      const updateRes = await adminAgent.put(`/admin/users/${user.id}`)
+        .send({ name: 'Updated Name', email: uniqueEmail, role: 'doctor', phone: '+7 (999) 111-11-11' });
+
+      expect(updateRes.status).toBe(200);
+      expect(updateRes.body.success).toContain('обновлен');
+
+      const updated = db.prepare('SELECT * FROM users WHERE id=?').get(user.id);
+      expect(updated.name).toBe('Updated Name');
+      expect(updated.phone).toBe('+7 (999) 111-11-11');
+      expect(updated.role).toBe('doctor');
+    });
+
+    test('PUT /admin/users/:id - should update password if provided', async () => {
+      const uniqueEmail = 'passuser_' + Date.now() + '@test.com';
+      const createRes = await adminAgent.post('/admin/users')
+        .send({ name: 'Pass Test', email: uniqueEmail, password: 'oldpass123', confirm: 'oldpass123' });
+
+      const user = db.prepare('SELECT * FROM users WHERE email=?').get(uniqueEmail.toLowerCase());
+      const updateRes = await adminAgent.put(`/admin/users/${user.id}`)
+        .send({ name: 'Pass Test', email: uniqueEmail, password: 'newpass123', confirm: 'newpass123' });
+
+      expect(updateRes.status).toBe(200);
+
+      const updated = db.prepare('SELECT * FROM users WHERE id=?').get(user.id);
+      expect(updated.password).toBe('newpass123');
+    });
+
+    test('PUT /admin/users/:id - should keep password if not provided', async () => {
+      const uniqueEmail = 'nopasschange_' + Date.now() + '@test.com';
+      const createRes = await adminAgent.post('/admin/users')
+        .send({ name: 'Keep Pass', email: uniqueEmail, password: 'originalpass123', confirm: 'originalpass123' });
+
+      const user = db.prepare('SELECT * FROM users WHERE email=?').get(uniqueEmail.toLowerCase());
+      const updateRes = await adminAgent.put(`/admin/users/${user.id}`)
+        .send({ name: 'Keep Pass Updated', email: uniqueEmail, password: '', confirm: '' });
+
+      expect(updateRes.status).toBe(200);
+
+      const updated = db.prepare('SELECT * FROM users WHERE id=?').get(user.id);
+      expect(updated.password).toBe('originalpass123');
+    });
+
+    test('DELETE /admin/users/:id - should delete user successfully', async () => {
+      const uniqueEmail = 'deluser_' + Date.now() + '@test.com';
+      const createRes = await adminAgent.post('/admin/users')
+        .send({ name: 'To Delete', email: uniqueEmail, password: 'testpass123', confirm: 'testpass123' });
+
+      const user = db.prepare('SELECT * FROM users WHERE email=?').get(uniqueEmail.toLowerCase());
+      const deleteRes = await adminAgent.delete(`/admin/users/${user.id}`);
+
+      expect(deleteRes.status).toBe(200);
+      expect(deleteRes.body.success).toContain('удален');
+
+      const deleted = db.prepare('SELECT * FROM users WHERE id=?').get(user.id);
+      expect(deleted).toBeUndefined();
+    });
+
+    test('DELETE /admin/users/:id - should fail to delete own account', async () => {
+      const adminUser = db.prepare("SELECT * FROM users WHERE email='admin@medcenter.ru'").get();
+      const deleteRes = await adminAgent.delete(`/admin/users/${adminUser.id}`);
+
+      expect(deleteRes.status).toBe(400);
+      expect(deleteRes.body.error).toContain('Вы не можете удалить свой аккаунт');
+
+      const still = db.prepare('SELECT * FROM users WHERE id=?').get(adminUser.id);
+      expect(still).toBeDefined();
+    });
+
+    test('DELETE /admin/users/:id - should fail if user not found', async () => {
+      const deleteRes = await adminAgent.delete('/admin/users/99999');
+      expect(deleteRes.status).toBe(404);
+      expect(deleteRes.body.error).toContain('Пользователь не найден');
     });
   });
 

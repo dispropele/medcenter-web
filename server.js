@@ -441,7 +441,109 @@ app.post('/admin/services/:id/delete', auth, adminOnly, (req,res) => {
 
 // Пользователи
 app.get('/admin/users', auth, adminOnly, (req,res) => {
-  res.render('admin/users', { users: db.prepare('SELECT * FROM users ORDER BY role,name').all() });
+  res.render('admin/users', { 
+    users: db.prepare('SELECT * FROM users ORDER BY role,name').all(),
+    edit: null,
+    error: null,
+    success: null
+  });
+});
+
+app.get('/admin/users/new', auth, adminOnly, (req,res) => {
+  res.render('admin/users', { 
+    users: db.prepare('SELECT * FROM users ORDER BY role,name').all(),
+    edit: null,
+    form: {},
+    error: null,
+    success: null
+  });
+});
+
+app.get('/admin/users/:id/edit', auth, adminOnly, (req,res) => {
+  const edit = db.prepare('SELECT * FROM users WHERE id=?').get(req.params.id);
+  if (!edit) return res.redirect('/admin/users');
+  res.render('admin/users', { 
+    users: db.prepare('SELECT * FROM users ORDER BY role,name').all(),
+    edit,
+    form: edit,
+    error: null,
+    success: null
+  });
+});
+
+app.post('/admin/users', auth, adminOnly, (req,res) => {
+  const { name='', email='', password='', confirm='', role='patient', phone='', dob='', gender='', address='' } = req.body;
+  const users = db.prepare('SELECT * FROM users ORDER BY role,name').all();
+  
+  if (!name.trim()) return res.render('admin/users', { users, edit:null, form:req.body, error:'Введите ФИО', success:null });
+  if (name.trim().length < 3) return res.render('admin/users', { users, edit:null, form:req.body, error:'ФИО не короче 3 символов', success:null });
+  if (!/^[^@]+@[^@]+\.[^@]+$/.test(email)) return res.render('admin/users', { users, edit:null, form:req.body, error:'Некорректный email', success:null });
+  if (password.length < 6) return res.render('admin/users', { users, edit:null, form:req.body, error:'Пароль не короче 6 символов', success:null });
+  if (password !== confirm) return res.render('admin/users', { users, edit:null, form:req.body, error:'Пароли не совпадают', success:null });
+  
+  try {
+    if (db.prepare('SELECT id FROM users WHERE email=?').get(email.toLowerCase())) 
+      return res.render('admin/users', { users, edit:null, form:req.body, error:'Email уже занят', success:null });
+    
+    db.prepare('INSERT INTO users(name,email,password,role,phone,dob,gender,address) VALUES(?,?,?,?,?,?,?,?)')
+      .run(name.trim(), email.toLowerCase(), password, role, phone, dob, gender, address);
+    
+    res.render('admin/users', { 
+      users: db.prepare('SELECT * FROM users ORDER BY role,name').all(),
+      edit: null,
+      form: {},
+      error: null,
+      success: `Пользователь «${name.trim()}» добавлен`
+    });
+  } catch (e) {
+    res.render('admin/users', { users, edit:null, form:req.body, error:'Ошибка при добавлении пользователя', success:null });
+  }
+});
+
+app.put('/admin/users/:id', auth, adminOnly, (req,res) => {
+  const { name='', email='', password='', confirm='', role='patient', phone='', dob='', gender='', address='' } = req.body;
+  const existing = db.prepare('SELECT * FROM users WHERE id=?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Пользователь не найден' });
+  
+  if (!name.trim()) return res.status(400).json({ error:'Введите ФИО' });
+  if (name.trim().length < 3) return res.status(400).json({ error:'ФИО не короче 3 символов' });
+  if (!/^[^@]+@[^@]+\.[^@]+$/.test(email)) return res.status(400).json({ error:'Некорректный email' });
+  
+  // Если пароль не указан, оставим старый
+  let finalPassword = existing.password;
+  if (password) {
+    if (password.length < 6) return res.status(400).json({ error:'Пароль не короче 6 символов' });
+    if (password !== confirm) return res.status(400).json({ error:'Пароли не совпадают' });
+    finalPassword = password;
+  }
+  
+  // Если email изменился, проверяем что он не занят
+  if (email.toLowerCase() !== existing.email.toLowerCase()) {
+    if (db.prepare('SELECT id FROM users WHERE email=?').get(email.toLowerCase()))
+      return res.status(400).json({ error:'Email уже занят' });
+  }
+  
+  try {
+    db.prepare(`UPDATE users SET name=?, email=?, password=?, role=?, phone=?, dob=?, gender=?, address=? WHERE id=?`)
+      .run(name.trim(), email.toLowerCase(), finalPassword, role, phone, dob, gender, address, req.params.id);
+    res.json({ success: `Пользователь «${name.trim()}» обновлен` });
+  } catch (e) {
+    res.status(400).json({ error: 'Ошибка при обновлении пользователя' });
+  }
+});
+
+app.delete('/admin/users/:id', auth, adminOnly, (req,res) => {
+  const user = db.prepare('SELECT * FROM users WHERE id=?').get(req.params.id);
+  if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+  if (req.session.user.id === parseInt(req.params.id)) 
+    return res.status(400).json({ error: 'Вы не можете удалить свой аккаунт' });
+  
+  try {
+    db.prepare('DELETE FROM users WHERE id=?').run(req.params.id);
+    res.json({ success: `Пользователь «${user.name}» удален` });
+  } catch (e) {
+    res.status(400).json({ error: 'Ошибка при удалении пользователя' });
+  }
 });
 
 // ══════════════════════════════════════════════════════════════
