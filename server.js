@@ -144,6 +144,11 @@ app.post('/appointments', auth, (req,res) => {
     : null;
   if (!patient_id || !doctor_id || !datetime)
     return res.render('appointments/new', { specs, patients, error:'Заполните все обязательные поля', form:req.body });
+  
+  // Проверка на накладку времени у врача
+  const existing = db.prepare('SELECT id FROM appointments WHERE doctor_id=? AND datetime=?').get(doctor_id, datetime);
+  if (existing) return res.render('appointments/new', { specs, patients, error:'На это время у врача уже есть запись', form:req.body });
+  
   db.prepare('INSERT INTO appointments(patient_id,doctor_id,datetime,notes) VALUES(?,?,?,?)')
     .run(patient_id, doctor_id, datetime, notes);
   res.redirect('/appointments');
@@ -230,8 +235,13 @@ app.post('/visits/:appt_id', auth, staffOnly, (req,res) => {
 // ══════════════════════════════════════════════════════════════
 app.post('/visit-analyses', auth, staffOnly, (req,res) => {
   const { visit_id, service_id, date_assigned, result='' } = req.body;
-  if (!visit_id || !service_id || !date_assigned)
-    return res.redirect('back');
+  if (!visit_id || !service_id || !date_assigned) return res.redirect('back');
+  
+  // Проверка что дата в пределах разумного
+  const today = new Date().toISOString().split('T')[0];
+  const checkDate = date_assigned.includes('-') ? date_assigned : date_assigned.split('.').reverse().join('-');
+  if (checkDate > today) return res.redirect('back');
+  
   db.prepare('INSERT INTO visit_analyses(visit_id,service_id,date_assigned,result) VALUES(?,?,?,?)')
     .run(visit_id, service_id, date_assigned, result);
   // Redirect back to the appointment
@@ -274,6 +284,12 @@ app.post('/contracts', auth, adminOnly, (req,res) => {
   const patients = db.prepare("SELECT id,name FROM users WHERE role='patient' ORDER BY name").all();
   if (!patient_id) return res.render('contracts/new', { patients, error:'Выберите пациента', form:req.body });
   if (!date)       return res.render('contracts/new', { patients, error:'Укажите дату', form:req.body });
+  
+  // Проверка на будущую дату
+  const today = new Date().toISOString().split('T')[0];
+  const inputDate = date.split('-').reverse().join('-'); // Конвертируем из ДД.ММ.ГГГГ в ГГГГ-МС-ДД если нужно
+  const contractDate = date.includes('-') ? date : date.split('.').reverse().join('-');
+  if (contractDate > today) return res.render('contracts/new', { patients, error:'Дата не может быть больше текущей', form:req.body });
   
   const cid = db.prepare('INSERT INTO contracts(patient_id,total,date) VALUES(?,?,?)').run(patient_id, parseFloat(total)||0, date).lastInsertRowid;
   res.redirect('/contracts/'+cid);
@@ -343,6 +359,14 @@ app.post('/receipts', auth, adminOnly, (req,res) => {
   // Проверка что все услуги имеют ненулевую стоимость
   const zeroPrice = validIdx.find(i => !priceArr[i] || parseFloat(priceArr[i]) === 0);
   if (zeroPrice !== undefined) return res.render('receipts/new', { contracts, services, error:'Все услуги должны иметь стоимость больше нуля', form:req.body });
+  
+  // Проверка на повтор услуги
+  const usedServices = new Set();
+  for (let i of validIdx) {
+    const svcId = sidArr[i];
+    if (usedServices.has(svcId)) return res.render('receipts/new', { contracts, services, error:'Эта услуга уже добавлена в квитанцию', form:req.body });
+    usedServices.add(svcId);
+  }
 
   const total = validIdx.reduce((s,i) => s + (parseFloat(priceArr[i])||0) * (parseInt(qtyArr[i])||1), 0);
   const rid = db.prepare('INSERT INTO receipts(contract_id,date,amount,status) VALUES(?,?,?,?)').run(contract_id,date,total,'Ожидает оплаты').lastInsertRowid;
@@ -394,7 +418,20 @@ app.get('/checks', auth, adminOnly, (req,res) => {
 app.post('/checks', auth, adminOnly, (req,res) => {
   const { receipt_id, amount, date, payment_method='Наличные' } = req.body;
   if (!receipt_id || !amount || !date) return res.redirect('back');
-  db.prepare('INSERT INTO checks(receipt_id,amount,date,payment_method) VALUES(?,?,?,?)').run(receipt_id, parseFloat(amount)||0, date, payment_method);
+  
+  const amountNum = parseFloat(amount)||0;
+  if (amountNum <= 0) return res.redirect('back');
+  
+  // Проверка что дата не в будущем
+  const today = new Date().toISOString().split('T')[0];
+  const checkDate = date.includes('-') ? date : date.split('.').reverse().join('-');
+  if (checkDate > today) return res.redirect('back');
+  
+  // Проверка что сумма не превышает сумму квитанции
+  const receipt = db.prepare('SELECT amount FROM receipts WHERE id=?').get(receipt_id);
+  if (receipt && amountNum > receipt.amount) return res.redirect('back');
+  
+  db.prepare('INSERT INTO checks(receipt_id,amount,date,payment_method) VALUES(?,?,?,?)').run(receipt_id, amountNum, date, payment_method);
   db.prepare("UPDATE receipts SET status='Оплачено' WHERE id=?").run(receipt_id);
   res.redirect('/receipts/'+receipt_id);
 });
@@ -410,11 +447,13 @@ app.post('/admin/specializations', auth, adminOnly, (req,res) => {
   const { name='' } = req.body;
   const specs = db.prepare('SELECT * FROM specializations ORDER BY name').all();
   if (!name.trim()) return res.render('admin/specializations', { specs, error:'Не введено наименование специализации', success:null });
-  if (name.trim().length < 3) return res.render('admin/specializations', { specs, error:'Не менее 3 символов', success:null });
+  if (name.trim().length < 3) return res.render('admin/specializations', { specs, error:'Специализация не короче 3 символов', success:null });
+  if (name.trim().length > 100) return res.render('admin/specializations', { specs, error:'Специализация не длиннее 100 символов', success:null });
+  if (!/^[а-яА-ЯёЁ\s\-]+$/.test(name.trim())) return res.render('admin/specializations', { specs, error:'Только русские буквы, пробелы и дефисы', success:null });
   try {
     db.prepare('INSERT INTO specializations(name) VALUES(?)').run(name.trim());
     res.render('admin/specializations', { specs: db.prepare('SELECT * FROM specializations ORDER BY name').all(), error:null, success:`«${name.trim()}» добавлена` });
-  } catch { res.render('admin/specializations', { specs, error:'Уже существует', success:null }); }
+  } catch { res.render('admin/specializations', { specs, error:'Специализация уже существует', success:null }); }
 });
 app.post('/admin/specializations/:id/delete', auth, adminOnly, (req,res) => {
   db.prepare('DELETE FROM specializations WHERE id=?').run(req.params.id);
@@ -428,9 +467,15 @@ app.get('/admin/services', auth, adminOnly, (req,res) => {
 app.post('/admin/services', auth, adminOnly, (req,res) => {
   const { name='', description='', price=0 } = req.body;
   const services = db.prepare('SELECT * FROM services ORDER BY name').all();
+  if (!name.trim()) return res.render('admin/services', { services, error:'Не введено название услуги', success:null });
   if (name.trim().length < 3) return res.render('admin/services', { services, error:'Название не короче 3 символов', success:null });
+  if (name.trim().length > 100) return res.render('admin/services', { services, error:'Название не длиннее 100 символов', success:null });
+  if (description.length > 500) return res.render('admin/services', { services, error:'Описание не длиннее 500 символов', success:null });
+  const priceNum = parseFloat(price)||0;
+  if (priceNum < 0) return res.render('admin/services', { services, error:'Цена не может быть отрицательной', success:null });
+  if (priceNum === 0) return res.render('admin/services', { services, error:'Цена должна быть больше нуля', success:null });
   try {
-    db.prepare('INSERT INTO services(name,description,price) VALUES(?,?,?)').run(name.trim(), description, parseFloat(price)||0);
+    db.prepare('INSERT INTO services(name,description,price) VALUES(?,?,?)').run(name.trim(), description, priceNum);
     res.render('admin/services', { services: db.prepare('SELECT * FROM services ORDER BY name').all(), error:null, success:`«${name.trim()}» добавлена` });
   } catch { res.render('admin/services', { services, error:'Услуга с таким названием уже существует', success:null }); }
 });
