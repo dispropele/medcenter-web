@@ -662,8 +662,7 @@ app.get('/reports', auth, adminOnly, (req,res) => {
         JOIN users ud ON d.user_id=ud.id
         JOIN specializations s ON d.spec_id=s.id
         LEFT JOIN appointments a ON a.doctor_id=d.id AND (substr(a.datetime,7,4)||substr(a.datetime,4,2)||substr(a.datetime,1,2)) >= ? AND (substr(a.datetime,7,4)||substr(a.datetime,4,2)||substr(a.datetime,1,2)) <= ?
-        LEFT JOIN visits v ON v.appointment_id=a.id
-        LEFT JOIN contracts c ON c.visit_id=v.id
+        LEFT JOIN contracts c ON c.patient_id=a.patient_id
         LEFT JOIN receipts r ON r.contract_id=c.id
         GROUP BY d.id, ud.name, s.name
         ORDER BY ud.name
