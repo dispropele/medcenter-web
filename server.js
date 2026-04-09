@@ -292,11 +292,15 @@ app.post('/contracts', auth, adminOnly, (req,res) => {
   
   // Проверка на будущую дату
   const today = new Date().toISOString().split('T')[0];
-  const inputDate = date.split('-').reverse().join('-'); // Конвертируем из ДД.ММ.ГГГГ в ГГГГ-МС-ДД если нужно
   const contractDate = date.includes('-') ? date : date.split('.').reverse().join('-');
   if (contractDate > today) return res.render('contracts/new', { patients, error:'Дата не может быть больше текущей', form:req.body });
   
-  const cid = db.prepare('INSERT INTO contracts(patient_id,total,date) VALUES(?,?,?)').run(patient_id, parseFloat(total)||0, date).lastInsertRowid;
+  // Нормализуем формат даты ГГГГ-ММ-ДД => ДД.ММ.ГГГГ
+  const normalizedDate = date.includes('-') 
+    ? date.split('-').reverse().join('.')
+    : date;
+  
+  const cid = db.prepare('INSERT INTO contracts(patient_id,total,date) VALUES(?,?,?)').run(patient_id, parseFloat(total)||0, normalizedDate).lastInsertRowid;
   res.redirect('/contracts/'+cid);
 });
 
@@ -373,8 +377,13 @@ app.post('/receipts', auth, adminOnly, (req,res) => {
     usedServices.add(svcId);
   }
 
+  // Нормализуем формат даты ГГГГ-ММ-ДД => ДД.ММ.ГГГГ
+  const normalizedDate = date.includes('-')
+    ? date.split('-').reverse().join('.')
+    : date;
+
   const total = validIdx.reduce((s,i) => s + (parseFloat(priceArr[i])||0) * (parseInt(qtyArr[i])||1), 0);
-  const rid = db.prepare('INSERT INTO receipts(contract_id,date,amount,status) VALUES(?,?,?,?)').run(contract_id,date,total,'Ожидает оплаты').lastInsertRowid;
+  const rid = db.prepare('INSERT INTO receipts(contract_id,date,amount,status) VALUES(?,?,?,?)').run(contract_id,normalizedDate,total,'Ожидает оплаты').lastInsertRowid;
   const ins = db.prepare('INSERT INTO receipt_services(receipt_id,service_id,qty,price) VALUES(?,?,?,?)');
   validIdx.forEach(i => ins.run(rid, sidArr[i]||null, parseInt(qtyArr[i])||1, parseFloat(priceArr[i])||0));
   // Обновляем общую сумму договора
@@ -436,7 +445,12 @@ app.post('/checks', auth, adminOnly, (req,res) => {
   const receipt = db.prepare('SELECT amount FROM receipts WHERE id=?').get(receipt_id);
   if (receipt && amountNum > receipt.amount) return res.redirect('back');
   
-  db.prepare('INSERT INTO checks(receipt_id,amount,date,payment_method) VALUES(?,?,?,?)').run(receipt_id, amountNum, date, payment_method);
+  // Нормализуем формат даты ГГГГ-ММ-ДД => ДД.ММ.ГГГГ
+  const normalizedDate = date.includes('-')
+    ? date.split('-').reverse().join('.')
+    : date;
+  
+  db.prepare('INSERT INTO checks(receipt_id,amount,date,payment_method) VALUES(?,?,?,?)').run(receipt_id, amountNum, normalizedDate, payment_method);
   db.prepare("UPDATE receipts SET status='Оплачено' WHERE id=?").run(receipt_id);
   res.redirect('/receipts/'+receipt_id);
 });
@@ -624,7 +638,7 @@ app.get('/reports', auth, adminOnly, (req,res) => {
         JOIN users ud ON d.user_id=ud.id
         JOIN specializations s ON d.spec_id=s.id
         WHERE (${dcA}) >= ? AND (${dcA}) <= ?
-        ORDER BY ${dcA}
+        ORDER BY ${dcA} DESC, a.id DESC
       `).all(f,t);
     }
     if (!type || type==='services') {
@@ -639,7 +653,7 @@ app.get('/reports', auth, adminOnly, (req,res) => {
         JOIN doctors d ON a.doctor_id=d.id
         JOIN users ud ON d.user_id=ud.id
         WHERE (${dcS}) >= ? AND (${dcS}) <= ?
-        ORDER BY ${dcS}
+        ORDER BY ${dcS} DESC, va.id DESC
       `).all(f,t);
     }
     if (!type || type==='issued_referrals') {
@@ -655,22 +669,23 @@ app.get('/reports', auth, adminOnly, (req,res) => {
         JOIN doctors d ON a.doctor_id=d.id
         JOIN users ud ON d.user_id=ud.id
         WHERE (${dcS}) >= ? AND (${dcS}) <= ?
-        ORDER BY ${dcS}
+        ORDER BY ${dcS} DESC, va.id DESC
       `).all(f,t);
     }
     if (!type || type==='doctor_revenue') {
       doctor_revenue = db.prepare(`
         SELECT ud.id doc_id, ud.name doc_name, s.name spec_name,
                COUNT(DISTINCT a.id) visit_count,
-               COALESCE(SUM(r.amount), 0) total_revenue
+               COALESCE(SUM(ch.amount), 0) total_revenue
         FROM doctors d
         JOIN users ud ON d.user_id=ud.id
         JOIN specializations s ON d.spec_id=s.id
         LEFT JOIN appointments a ON a.doctor_id=d.id AND (substr(a.datetime,7,4)||substr(a.datetime,4,2)||substr(a.datetime,1,2)) >= ? AND (substr(a.datetime,7,4)||substr(a.datetime,4,2)||substr(a.datetime,1,2)) <= ?
         LEFT JOIN contracts c ON c.patient_id=a.patient_id
         LEFT JOIN receipts r ON r.contract_id=c.id
+        LEFT JOIN checks ch ON ch.receipt_id=r.id
         GROUP BY d.id, ud.name, s.name
-        ORDER BY ud.name
+        ORDER BY total_revenue DESC, ud.name
       `).all(f,t);
     }
   }
