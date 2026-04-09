@@ -242,8 +242,13 @@ app.post('/visit-analyses', auth, staffOnly, (req,res) => {
   const checkDate = date_assigned.includes('-') ? date_assigned : date_assigned.split('.').reverse().join('-');
   if (checkDate > today) return res.redirect('back');
   
+  // Преобразуем формат даты ГГГГ-ММ-ДД => ДД.ММ.ГГГГ
+  const normalizedDate = date_assigned.includes('-') 
+    ? date_assigned.split('-').reverse().join('.')
+    : date_assigned;
+  
   db.prepare('INSERT INTO visit_analyses(visit_id,service_id,date_assigned,result) VALUES(?,?,?,?)')
-    .run(visit_id, service_id, date_assigned, result);
+    .run(visit_id, service_id, normalizedDate, result);
   // Redirect back to the appointment
   const visit = db.prepare('SELECT appointment_id FROM visits WHERE id=?').get(visit_id);
   res.redirect('/appointments/' + (visit ? visit.appointment_id : ''));
