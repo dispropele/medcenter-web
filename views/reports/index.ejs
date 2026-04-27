@@ -19,23 +19,25 @@
 <div class="page">
   <div class="page-header">
     <h1>Отчёты</h1>
-    <%if(from&&to&&(appointments.length||services.length||issued_referrals.length||doctor_revenue.length)){%>
+    <%if((appointments.length||services.length||issued_referrals.length||doctor_revenue.length)){%>
     <button onclick="window.print()" class="btn btn-outline">🖨 Печать</button>
     <%}%>
   </div>
 
   <div class="card mb-16">
     <div style="padding:14px 18px">
-      <form method="GET" action="/reports">
+      <form method="GET" action="/reports" onsubmit="sanitizeForm(event)">
         <div class="form-row" style="align-items:flex-end">
-          <div class="form-group" style="margin:0"><label>Период с</label>
-            <input type="date" name="from" value="<%=from%>">
-          </div>
-          <div class="form-group" style="margin:0"><label>по</label>
-            <input type="date" name="to" value="<%=to%>">
+          <div id="periodInputs" style="display:<%= (!type || type==='appointments' || type==='services') ? 'flex' : 'none' %>">
+            <div class="form-group" style="margin:0"><label>Период с</label>
+              <input type="date" name="from" value="<%=from%>" id="from_input">
+            </div>
+            <div class="form-group" style="margin:0"><label>по</label>
+              <input type="date" name="to" value="<%=to%>" id="to_input">
+            </div>
           </div>
           <div class="form-group" style="margin:0"><label>Тип отчёта</label>
-            <select name="type">
+            <select name="type" onchange="onTypeChange(this.value)">
               <option value="">Все</option>
               <option value="appointments" <%=type==='appointments'?'selected':''%>>Записи к врачу</option>
               <option value="services"    <%=type==='services'   ?'selected':''%>>Отчёт об оказанных услугах за период</option>
@@ -43,6 +45,72 @@
               <option value="doctor_revenue" <%=type==='doctor_revenue'?'selected':''%>>Отчёт по загруженности и выручке врачей</option>
             </select>
           </div>
+
+          <div id="filters-services" style="display:<%= type==='services' ? 'flex' : 'none' %>;gap:10px;align-items:flex-end">
+            <div class="form-group"><label>Врач</label>
+              <select name="doctor_id" id="doctor_id_svc" class="filter-field">
+                <option value="">Все</option>
+                <% doctors.forEach(function(doc){ %>
+                <option value="<%=doc.id%>" <%=query.doctor_id==String(doc.id)?'selected':''%>><%=doc.name%></option>
+                <% }) %>
+              </select>
+            </div>
+            <div class="form-group"><label>Анализ / услуга</label>
+              <select name="svc_id" id="svc_id_svc" class="filter-field">
+                <option value="">Все</option>
+                <% servicesList.forEach(function(s){ %>
+                <option value="<%=s.id%>" <%=query.svc_id==String(s.id)?'selected':''%>><%=s.name%></option>
+                <% }) %>
+              </select>
+            </div>
+            <div class="form-group"><label>Группировать</label>
+              <select name="group_by" id="group_by_svc" class="filter-field">
+                <option value="">Нет</option>
+                <option value="doctor" <%=query.group_by==='doctor'?'selected':''%>>По врачу</option>
+              </select>
+            </div>
+            <div class="form-group"><label>Сортировать</label>
+              <select name="sort" id="sort_svc" class="filter-field">
+                <option value="">По дате</option>
+                <option value="patient" <%=query.sort==='patient'?'selected':''%>>По пациенту</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="filters-issued" style="display:<%= type==='issued_referrals' ? 'flex' : 'none' %>;gap:10px;align-items:flex-end">
+            <div class="form-group"><label>Анализ / услуга</label>
+              <select name="svc_id" id="svc_id_issued" class="filter-field">
+                <option value="">Все</option>
+                <% servicesList.forEach(function(s){ %>
+                <option value="<%=s.id%>" <%=query.svc_id==String(s.id)?'selected':''%>><%=s.name%></option>
+                <% }) %>
+              </select>
+            </div>
+            <div class="form-group"><label>Группировать</label>
+              <select name="group_by" id="group_by_issued" class="filter-field">
+                <option value="">Нет</option>
+                <option value="analysis" <%=query.group_by==='analysis'?'selected':''%>>По анализу</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="filters-revenue" style="display:<%= type==='doctor_revenue' ? 'flex' : 'none' %>;gap:10px;align-items:flex-end">
+            <div class="form-group"><label>Специализация</label>
+              <select name="spec_id" id="spec_id_rev" class="filter-field">
+                <option value="">Все</option>
+                <% specs.forEach(function(s){ %>
+                <option value="<%=s.id%>" <%=query.spec_id==String(s.id)?'selected':''%>><%=s.name%></option>
+                <% }) %>
+              </select>
+            </div>
+            <div class="form-group"><label>Группировать</label>
+              <select name="group_by" id="group_by_rev" class="filter-field">
+                <option value="">Нет</option>
+                <option value="specialization" <%=query.group_by==='specialization'?'selected':''%>>По специализации</option>
+              </select>
+            </div>
+          </div>
+
           <div style="padding-bottom:2px">
             <button class="btn btn-primary">Сформировать</button>
           </div>
@@ -51,42 +119,48 @@
     </div>
   </div>
 
-  <%if(!from||!to){%>
-  <div class="empty-state"><div class="empty-icon">📊</div><p>Выберите период</p></div>
-  <%}else{
-    var fL=fmt(from), tL=fmt(to);
+  <% const needsRange = (!type || type==='appointments' || type==='services'); %>
+  <% if (needsRange && !hasRange) { %>
+    <div class="empty-state"><div class="empty-icon">📊</div><p>Выберите период</p></div>
+  <% } else {
+    var fL = hasRange ? fmt(from) : '';
+    var tL = hasRange ? fmt(to) : '';
   %>
 
   <%if(!type||type==='appointments'){%>
   <div class="card mb-16">
     <div class="card-header">
       <div>
-        <h2>Список принятых заявок</h2>
+        <h2>Отчёт о записях пациентов<% if (hasRange) { %> за период<% } %></h2>
+        <% if (hasRange) { %>
         <span class="text-muted" style="font-size:12.5px"><%=fL%> — <%=tL%></span>
+        <% } %>
       </div>
       <span class="badge badge-info"><%=appointments.length%></span>
     </div>
     <%if(!appointments.length){%>
     <div class="empty-state"><p>Записей за период нет</p></div>
     <%}else{%>
-    <table class="table">
-      <thead><tr><th>#</th><th>Пациент</th><th>Телефон</th><th>Специализация</th><th>Врач</th><th>Дата и время</th><th>Статус</th><th>Примечание</th></tr></thead>
-      <tbody>
-        <%appointments.forEach(function(a,i){%>
-        <tr>
-          <td class="text-muted"><%=i+1%></td>
-          <td><strong><%=a.patient_name%></strong></td>
-          <td class="text-muted"><%=a.patient_phone||'—'%></td>
-          <td><%=a.spec_name%></td>
-          <td><%=a.doc_name%></td>
-          <td><%= formatDateTime(a.datetime) %></td>
-          <td><span class="badge badge-<%=a.status==='Принят'?'success':a.status==='Отменён'?'danger':'warning'%>"><%=a.status%></span></td>
-          <td class="text-muted"><%=a.notes||'—'%></td>
-        </tr>
-        <%})%>
-      </tbody>
-      <tfoot><tr><td colspan="8"><strong>Итого: <%=appointments.length%></strong></td></tr></tfoot>
-    </table>
+    <% appointments.forEach(function(gr){ %>
+      <h3 style="margin:8px 16px"><%=gr.spec_name%></h3>
+      <table class="table">
+        <thead><tr><th>#</th><th>Пациент</th><th>Телефон</th><th>Врач</th><th>Дата и время</th><th>Статус</th><th>Примечание</th></tr></thead>
+        <tbody>
+          <%gr.items.forEach(function(a,i){%>
+          <tr>
+            <td class="text-muted"><%=i+1%></td>
+            <td><strong><%=a.patient_name%></strong></td>
+            <td class="text-muted"><%=a.patient_phone||'—'%></td>
+            <td><%=a.doc_name%></td>
+            <td><%= formatDateTime(a.datetime) %></td>
+            <td><span class="badge badge-<%=a.status==='Принят'?'success':a.status==='Отменён'?'danger':'warning'%>"><%=a.status%></span></td>
+            <td class="text-muted"><%=a.notes||'—'%></td>
+          </tr>
+          <%})%>
+        </tbody>
+        <tfoot><tr><td colspan="7"><strong>Итого: <%=gr.items.length%></strong></td></tr></tfoot>
+      </table>
+    <% }) %>
     <%}%>
   </div>
   <%}%>
@@ -97,37 +171,63 @@
   <div class="card mb-16">
     <div class="card-header">
       <div>
-        <h2>Отчёт об оказанных услугах за период</h2>
+        <h2>Отчёт об оказанных услугах<% if (hasRange) { %> за период<% } %></h2>
+        <% if (hasRange) { %>
         <span class="text-muted" style="font-size:12.5px"><%=fL%> — <%=tL%></span>
+        <% } %>
       </div>
       <span class="badge badge-info"><%=services.length%></span>
     </div>
     <%if(!services.length){%>
     <div class="empty-state"><p>Услуг за период нет</p></div>
     <%}else{%>
-    <table class="table">
-      <thead><tr><th>#</th><th>Пациент</th><th>Анализ / услуга</th><th>Цена, ₽</th><th>Врач</th><th>Дата</th><th>Результат</th></tr></thead>
-      <tbody>
-        <%services.forEach(function(r,i){%>
-        <tr>
-          <td class="text-muted"><%=i+1%></td>
-          <td><strong><%=r.patient_name%></strong></td>
-          <td><%=r.svc_name%></td>
-          <td><%=Number(parseFloat(r.svc_price)).toLocaleString('ru')%></td>
-          <td><%=r.doc_name%></td>
-          <td><%= formatDateTime(r.date_assigned) %></td>
-          <td><%-r.result?r.result:'<span class="text-muted">Ожидается</span>'%></td>
-        </tr>
-        <%})%>
-      </tbody>
-      <tfoot>
-        <tr>
-          <td colspan="3"><strong>Итого: <%=services.length%></strong></td>
-          <td><strong><%=Number(servSum).toLocaleString('ru')%> ₽</strong></td>
-          <td colspan="3"></td>
-        </tr>
-      </tfoot>
-    </table>
+    <% if (Array.isArray(services) && services.length && services[0].doc_name && services[0].items===undefined) { %>
+      <!-- Flat list grouped by doctor option not selected -->
+      <table class="table">
+        <thead><tr><th>#</th><th>Пациент</th><th>Анализ / услуга</th><th>Дата</th><th>Цена, ₽</th><th>Врач</th><th>Результат</th></tr></thead>
+        <tbody>
+          <%services.forEach(function(r,i){%>
+          <tr>
+            <td class="text-muted"><%=i+1%></td>
+            <td><strong><%=r.patient_name%></strong></td>
+            <td><%=r.svc_name%></td>
+            <td><%= formatDateTime(r.date_assigned) %></td>
+            <td><%=Number(parseFloat(r.svc_price)).toLocaleString('ru')%></td>
+            <td><%=r.doc_name%></td>
+            <td><%-r.result?r.result:'<span class="text-muted">Ожидается</span>'%></td>
+          </tr>
+          <%})%>
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3"><strong>Итого: <%=services.length%></strong></td>
+            <td colspan="1"></td>
+            <td><strong><%=Number(servSum).toLocaleString('ru')%> ₽</strong></td>
+            <td colspan="2"></td>
+          </tr>
+        </tfoot>
+      </table>
+    <% } else if (Array.isArray(services) && services.length && services[0].items) { %>
+      <!-- Grouped by doctor -->
+      <% services.forEach(function(g){ %>
+        <h3 style="margin:8px 16px"><%=g.doc_name%> (<%=g.items.length%>)</h3>
+        <table class="table">
+          <thead><tr><th>#</th><th>Пациент</th><th>Анализ / услуга</th><th>Дата</th><th>Цена, ₽</th><th>Результат</th></tr></thead>
+          <tbody>
+            <%g.items.forEach(function(r,i){%>
+            <tr>
+              <td class="text-muted"><%=i+1%></td>
+              <td><strong><%=r.patient_name%></strong></td>
+              <td><%=r.svc_name%></td>
+              <td><%= formatDateTime(r.date_assigned) %></td>
+              <td><%=Number(parseFloat(r.svc_price)).toLocaleString('ru')%></td>
+              <td><%-r.result?r.result:'<span class="text-muted">Ожидается</span>'%></td>
+            </tr>
+            <%})%>
+          </tbody>
+        </table>
+      <% }) %>
+    <% } %>
     <%}%>
   </div>
   <%}%>
@@ -139,7 +239,9 @@
     <div class="card-header">
       <div>
         <h2>Отчет о выданных направлениях</h2>
+        <% if (hasRange) { %>
         <span class="text-muted" style="font-size:12.5px"><%=fL%> — <%=tL%></span>
+        <% } %>
       </div>
       <span class="badge badge-info"><%=issued_referrals.length%></span>
     </div>
@@ -147,45 +249,71 @@
     <div class="empty-state"><p>Направлений за период нет</p></div>
     <%}else{%>
     <div style="overflow-x:auto">
-    <table class="table">
-      <thead><tr><th>#</th><th>Период с</th><th>Период по</th><th>Дата выдачи</th><th>ФИО пациента</th><th>Наименование анализа</th><th>ФИО врача</th><th>Цена, ₽</th><th>Дата отчета</th></tr></thead>
-      <tbody>
-        <%issued_referrals.forEach(function(r,i){%>
-        <tr>
-          <td class="text-muted"><%=i+1%></td>
-          <td><%=fmt(from)%></td>
-          <td><%=fmt(to)%></td>
-          <td><%= formatDateTime(r.date_assigned) %></td>
-          <td><strong><%=r.patient_name%></strong></td>
-          <td><%=r.svc_name%></td>
-          <td><%=r.doc_name%></td>
-          <td><%=Number(parseFloat(r.svc_price)).toLocaleString('ru')%></td>
-          <td><%= formatDateTime(new Date().toISOString().slice(0,10)) %></td>
-        </tr>
-        <%})%>
-      </tbody>
-      <tfoot>
-        <tr>
-          <td colspan="7"><strong>Итого: <%=issued_referrals.length%></strong></td>
-          <td><strong><%=Number(refSum).toLocaleString('ru')%> ₽</strong></td>
-          <td></td>
-        </tr>
-      </tfoot>
-    </table>
+      <% if (Array.isArray(issued_referrals) && issued_referrals[0] && issued_referrals[0].items) { %>
+        <% issued_referrals.forEach(function(g){ %>
+          <h3 style="margin:8px 16px"><%=g.svc_name%> (<%=g.items.length%>)</h3>
+          <table class="table">
+            <thead><tr><th>#</th><th>Дата выдачи</th><th>ФИО пациента</th><th>ФИО врача</th><th>Цена, ₽</th></tr></thead>
+            <tbody>
+              <% g.items.forEach(function(r,i){ %>
+              <tr>
+                <td class="text-muted"><%=i+1%></td>
+                <td><%= formatDateTime(r.date_assigned) %></td>
+                <td><strong><%=r.patient_name%></strong></td>
+                <td><%=r.doc_name%></td>
+                <td><%=Number(parseFloat(r.svc_price)).toLocaleString('ru')%></td>
+              </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        <% }) %>
+      <% } else { %>
+        <table class="table">
+          <thead><tr><th>#</th><th>Дата выдачи</th><th>ФИО пациента</th><th>Наименование анализа</th><th>ФИО врача</th><th>Цена, ₽</th></tr></thead>
+          <tbody>
+            <%issued_referrals.forEach(function(r,i){%>
+            <tr>
+              <td class="text-muted"><%=i+1%></td>
+              <td><%= formatDateTime(r.date_assigned) %></td>
+              <td><strong><%=r.patient_name%></strong></td>
+              <td><%=r.svc_name%></td>
+              <td><%=r.doc_name%></td>
+              <td><%=Number(parseFloat(r.svc_price)).toLocaleString('ru')%></td>
+            </tr>
+            <%})%>
+          </tbody>
+        </table>
+      <% } %>
     </div>
     <%}%>
   </div>
   <%}%>
 
   <%if(!type||type==='doctor_revenue'){
-    var totVisits=doctor_revenue.reduce(function(s,r){return s+(parseInt(r.visit_count)||0);},0);
-    var totRevenue=doctor_revenue.reduce(function(s,r){return s+(parseFloat(r.total_revenue)||0);},0);
+    var totVisits=0, totRevenue=0;
+    if (Array.isArray(doctor_revenue) && doctor_revenue[0] && doctor_revenue[0].items) {
+      // Grouped by specialization
+      doctor_revenue.forEach(function(g){
+        g.items.forEach(function(d){
+          totVisits += parseInt(d.visit_count)||0;
+          totRevenue += parseFloat(d.total_revenue)||0;
+        });
+      });
+    } else {
+      // Not grouped
+      doctor_revenue.forEach(function(d){
+        totVisits += parseInt(d.visit_count)||0;
+        totRevenue += parseFloat(d.total_revenue)||0;
+      });
+    }
   %>
   <div class="card">
     <div class="card-header">
       <div>
-        <h2>Отчёт по загруженности и выручке врачей за период</h2>
+        <h2>Отчёт по загруженности и выручке врачей<% if (hasRange) { %> за период<% } %></h2>
+        <% if (hasRange) { %>
         <span class="text-muted" style="font-size:12.5px"><%=fL%> — <%=tL%></span>
+        <% } %>
       </div>
       <span class="badge badge-info"><%=doctor_revenue.length%></span>
     </div>
@@ -193,35 +321,96 @@
     <div class="empty-state"><p>Данных за период нет</p></div>
     <%}else{%>
     <div style="overflow-x:auto">
-    <table class="table">
-      <thead><tr><th>#</th><th>Период с</th><th>Период по</th><th>ФИО врача</th><th>Специализация</th><th>Кол-во посещений</th><th>Сумма, ₽</th><th>Дата отчета</th></tr></thead>
-      <tbody>
-        <%doctor_revenue.forEach(function(d,i){%>
-        <tr>
-          <td class="text-muted"><%=i+1%></td>
-          <td><%=fmt(from)%></td>
-          <td><%=fmt(to)%></td>
-          <td><strong><%=d.doc_name%></strong></td>
-          <td><%=d.spec_name%></td>
-          <td><%=parseInt(d.visit_count)||0%></td>
-          <td><%=Number(parseFloat(d.total_revenue)).toLocaleString('ru')%></td>
-          <td><%= formatDateTime(new Date().toISOString().slice(0,10)) %></td>
-        </tr>
-        <%})%>
-      </tbody>
-      <tfoot>
-        <tr>
-          <td colspan="5"><strong>Итого посещений: <%=totVisits%></strong></td>
-          <td colspan="1"></td>
-          <td><strong>Итого выручка: <%=Number(totRevenue).toLocaleString('ru')%> ₽</strong></td>
-          <td></td>
-        </tr>
-      </tfoot>
-    </table>
+    <% if (Array.isArray(doctor_revenue) && doctor_revenue[0] && doctor_revenue[0].items) { %>
+      <% doctor_revenue.forEach(function(g){ %>
+        <h3 style="margin:8px 16px"><%=g.spec_name%> (<%=g.items.length%>)</h3>
+        <table class="table">
+          <thead><tr><th>#</th><th>ФИО врача</th><th>Кол-во посещений</th><th>Сумма, ₽</th></tr></thead>
+          <tbody>
+            <% g.items.forEach(function(d,i){ %>
+            <tr>
+              <td class="text-muted"><%=i+1%></td>
+              <td><strong><%=d.doc_name%></strong></td>
+              <td><%=parseInt(d.visit_count)||0%></td>
+              <td><%=Number(parseFloat(d.total_revenue)).toLocaleString('ru')%></td>
+            </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      <% }) %>
+      <div style="padding:8px 16px"><strong>Итого посещений: <%=totVisits%></strong></div>
+      <div style="padding:8px 16px"><strong>Итого выручка: <%=Number(totRevenue).toLocaleString('ru')%> ₽</strong></div>
+      <div style="padding:8px 16px" class="text-muted">Дата отчёта: <%= formatDateTime(new Date().toISOString().slice(0,10)) %></div>
+    <% } else { %>
+      <table class="table">
+        <thead><tr><th>#</th><th>ФИО врача</th><th>Специализация</th><th>Кол-во посещений</th><th>Сумма, ₽</th></tr></thead>
+        <tbody>
+          <%doctor_revenue.forEach(function(d,i){%>
+          <tr>
+            <td class="text-muted"><%=i+1%></td>
+            <td><strong><%=d.doc_name%></strong></td>
+            <td><%=d.spec_name%></td>
+            <td><%=parseInt(d.visit_count)||0%></td>
+            <td><%=Number(parseFloat(d.total_revenue)).toLocaleString('ru')%></td>
+          </tr>
+          <%})%>
+        </tbody>
+      </table>
+      <div style="padding:8px 16px"><strong>Итого посещений: <%=totVisits%></strong></div>
+      <div style="padding:8px 16px"><strong>Итого выручка: <%=Number(totRevenue).toLocaleString('ru')%> ₽</strong></div>
+      <div style="padding:8px 16px" class="text-muted">Дата отчёта: <%= formatDateTime(new Date().toISOString().slice(0,10)) %></div>
+    <% } %>
     </div>
     <%}%>
   </div>
   <%}%>
   <%}%>
 </div>
+<script>
+function sanitizeForm(e) {
+  // Clear period inputs if they are disabled
+  if(document.getElementById('from_input')?.disabled) document.getElementById('from_input').value = '';
+  if(document.getElementById('to_input')?.disabled) document.getElementById('to_input').value = '';
+  // Clear all filter fields that are disabled
+  document.querySelectorAll('.filter-field[disabled]').forEach(f => {
+    if(f.name === 'group_by' || f.name === 'sort' || f.name === 'svc_id' || f.name === 'doctor_id' || f.name === 'spec_id') {
+      f.value = '';
+    }
+  });
+}
+function onTypeChange(t){
+  var period = document.getElementById('periodInputs');
+  var fs = document.getElementById('filters-services');
+  var fi = document.getElementById('filters-issued');
+  var fr = document.getElementById('filters-revenue');
+  var needsPeriod = (t==='services' || t==='appointments' || t==='');
+  if(period) {
+    period.style.display = needsPeriod ? 'flex' : 'none';
+    // Enable/disable period inputs
+    document.getElementById('from_input').disabled = !needsPeriod;
+    document.getElementById('to_input').disabled = !needsPeriod;
+  }
+  // Service filters
+  var servActive = (t==='services');
+  if(fs) fs.style.display = servActive ? 'flex' : 'none';
+  document.getElementById('doctor_id_svc').disabled = !servActive;
+  document.getElementById('svc_id_svc').disabled = !servActive;
+  document.getElementById('group_by_svc').disabled = !servActive;
+  document.getElementById('sort_svc').disabled = !servActive;
+  // Issued referrals filters
+  var issActive = (t==='issued_referrals');
+  if(fi) fi.style.display = issActive ? 'flex' : 'none';
+  document.getElementById('svc_id_issued').disabled = !issActive;
+  document.getElementById('group_by_issued').disabled = !issActive;
+  // Revenue filters
+  var revActive = (t==='doctor_revenue');
+  if(fr) fr.style.display = revActive ? 'flex' : 'none';
+  document.getElementById('spec_id_rev').disabled = !revActive;
+  document.getElementById('group_by_rev').disabled = !revActive;
+}
+document.addEventListener('DOMContentLoaded', function(){
+  var sel = document.querySelector('select[name="type"]');
+  onTypeChange(sel ? sel.value : '');
+});
+</script>
 <%- include('../partials/footer') %>

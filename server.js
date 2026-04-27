@@ -21,6 +21,36 @@ const auth       = (req, res, next) => req.session.user ? next() : res.redirect(
 const adminOnly  = (req, res, next) => req.session.user?.role === 'admin' ? next() : res.redirect('/dashboard');
 const staffOnly  = (req, res, next) => ['admin','doctor'].includes(req.session.user?.role) ? next() : res.redirect('/dashboard');
 const safe       = (v) => (v === undefined || v === null) ? null : v;
+const todayISOLocal = () => {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
+};
+const formatApptDatetime = (dt) => {
+  if (!dt) return '';
+  // Already in DD.MM.YYYY or DD.MM.YYYY HH:MM -> return as-is
+  if (dt.includes('.')) return dt;
+  // ISO-like YYYY-MM-DD or YYYY-MM-DD HH:MM
+  if (dt.includes('-')) {
+    const parts = dt.split(' ');
+    const datePart = parts[0];
+    const timePart = parts[1] || '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
+      const p = datePart.split('-');
+      const formatted = `${p[2]}.${p[1]}.${p[0]}`;
+      return timePart ? `${formatted} ${timePart}` : formatted;
+    }
+    return dt;
+  }
+  // Fallback to Date parsing
+  const d = new Date(dt);
+  if (isNaN(d)) return dt;
+  const day = String(d.getDate()).padStart(2,'0');
+  const month = String(d.getMonth()+1).padStart(2,'0');
+  const year = d.getFullYear();
+  const hours = String(d.getHours()).padStart(2,'0');
+  const mins = String(d.getMinutes()).padStart(2,'0');
+  return `${day}.${month}.${year} ${hours}:${mins}`;
+};
 
 // ══════════════════════════════════════════════════════════════
 // AUTH
@@ -238,7 +268,7 @@ app.post('/visit-analyses', auth, staffOnly, (req,res) => {
   if (!visit_id || !service_id || !date_assigned) return res.redirect('back');
   
   // Проверка что дата в пределах разумного
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayISOLocal();
   const checkDate = date_assigned.includes('-') ? date_assigned : date_assigned.split('.').reverse().join('-');
   if (checkDate > today) return res.redirect('back');
   
@@ -291,7 +321,7 @@ app.post('/contracts', auth, adminOnly, (req,res) => {
   if (!date)       return res.render('contracts/new', { patients, error:'Укажите дату', form:req.body });
   
   // Проверка на будущую дату
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayISOLocal();
   const contractDate = date.includes('-') ? date : date.split('.').reverse().join('-');
   if (contractDate > today) return res.render('contracts/new', { patients, error:'Дата не может быть больше текущей', form:req.body });
   
@@ -437,7 +467,7 @@ app.post('/checks', auth, adminOnly, (req,res) => {
   if (amountNum <= 0) return res.redirect('back');
   
   // Проверка что дата не в будущем
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayISOLocal();
   const checkDate = date.includes('-') ? date : date.split('.').reverse().join('-');
   if (checkDate > today) return res.redirect('back');
   
@@ -619,78 +649,161 @@ app.delete('/admin/users/:id', auth, adminOnly, (req,res) => {
 // REPORTS
 // ══════════════════════════════════════════════════════════════
 app.get('/reports', auth, adminOnly, (req,res) => {
-  const { from='', to='', type='' } = req.query;
-  let appointments=[], services=[], issued_referrals=[], doctor_revenue=[];
+  const { from='', to='', type='', doctor_id='', svc_id='', spec_id='', group_by='', sort='' } = req.query;
+  let appointments = [], services = [], issued_referrals = [], doctor_revenue = [];
+  // Lists for filter selects (pass to template)
+  const doctors = db.prepare('SELECT d.id, u.name FROM doctors d JOIN users u ON d.user_id=u.id ORDER BY u.name').all();
+  const servicesList = db.prepare('SELECT id, name FROM services ORDER BY name').all();
+  const specs = db.prepare('SELECT id, name FROM specializations ORDER BY name').all();
 
-  if (from && to) {
-    const f = from.replace(/-/g,''), t = to.replace(/-/g,'');
-    const dconv = `substr(%s,7,4)||substr(%s,4,2)||substr(%s,1,2)`;
-    const dcA = dconv.replace(/%s/g,'a.datetime');
-    const dcS = dconv.replace(/%s/g,'va.date_assigned');
+  const hasRange = from && to;
+  const f = hasRange ? from.replace(/-/g,'') : null;
+  const t = hasRange ? to.replace(/-/g,'') : null;
+  const dconv = `substr(%s,7,4)||substr(%s,4,2)||substr(%s,1,2)`;
+  const dcA = dconv.replace(/%s/g,'a.datetime');
+  const dcS = dconv.replace(/%s/g,'va.date_assigned');
 
-    if (!type || type==='appointments') {
-      appointments = db.prepare(`
-        SELECT a.*, up.name patient_name, up.phone patient_phone,
-               ud.name doc_name, s.name spec_name
-        FROM appointments a
-        JOIN users up ON a.patient_id=up.id
-        JOIN doctors d ON a.doctor_id=d.id
-        JOIN users ud ON d.user_id=ud.id
-        JOIN specializations s ON d.spec_id=s.id
-        WHERE (${dcA}) >= ? AND (${dcA}) <= ?
-        ORDER BY ${dcA} DESC, a.id DESC
-      `).all(f,t);
-    }
-    if (!type || type==='services') {
-      services = db.prepare(`
-        SELECT va.*, sv.name svc_name, sv.price svc_price,
-               up.name patient_name, ud.name doc_name
-        FROM visit_analyses va
-        JOIN services sv ON va.service_id=sv.id
-        JOIN visits v ON va.visit_id=v.id
-        JOIN appointments a ON v.appointment_id=a.id
-        JOIN users up ON a.patient_id=up.id
-        JOIN doctors d ON a.doctor_id=d.id
-        JOIN users ud ON d.user_id=ud.id
-        WHERE (${dcS}) >= ? AND (${dcS}) <= ?
-        ORDER BY ${dcS} DESC, va.id DESC
-      `).all(f,t);
-    }
-    if (!type || type==='issued_referrals') {
-      issued_referrals = db.prepare(`
-        SELECT va.*, sv.name svc_name, sv.price svc_price,
-               up.name patient_name, up.id patient_id,
-               ud.name doc_name, ud.id doc_id
-        FROM visit_analyses va
-        JOIN services sv ON va.service_id=sv.id
-        JOIN visits v ON va.visit_id=v.id
-        JOIN appointments a ON v.appointment_id=a.id
-        JOIN users up ON a.patient_id=up.id
-        JOIN doctors d ON a.doctor_id=d.id
-        JOIN users ud ON d.user_id=ud.id
-        WHERE (${dcS}) >= ? AND (${dcS}) <= ?
-        ORDER BY ${dcS} DESC, va.id DESC
-      `).all(f,t);
-    }
-    if (!type || type==='doctor_revenue') {
-      doctor_revenue = db.prepare(`
-        SELECT ud.id doc_id, ud.name doc_name, s.name spec_name,
-               COUNT(DISTINCT a.id) visit_count,
-               COALESCE(SUM(ch.amount), 0) total_revenue
-        FROM doctors d
-        JOIN users ud ON d.user_id=ud.id
-        JOIN specializations s ON d.spec_id=s.id
-        LEFT JOIN appointments a ON a.doctor_id=d.id AND (substr(a.datetime,7,4)||substr(a.datetime,4,2)||substr(a.datetime,1,2)) >= ? AND (substr(a.datetime,7,4)||substr(a.datetime,4,2)||substr(a.datetime,1,2)) <= ?
-        LEFT JOIN contracts c ON c.patient_id=a.patient_id
-        LEFT JOIN receipts r ON r.contract_id=c.id
-        LEFT JOIN checks ch ON ch.receipt_id=r.id
-        GROUP BY d.id, ud.name, s.name
-        ORDER BY total_revenue DESC, ud.name
-      `).all(f,t);
+  // Appointments: group by specialization, sorted by date (requires period)
+  if ((!type || type==='appointments') && hasRange) {
+    const rows = db.prepare(`
+      SELECT a.*, up.name patient_name, up.phone patient_phone,
+             ud.name doc_name, s.name spec_name
+      FROM appointments a
+      JOIN users up ON a.patient_id=up.id
+      JOIN doctors d ON a.doctor_id=d.id
+      JOIN users ud ON d.user_id=ud.id
+      JOIN specializations s ON d.spec_id=s.id
+      WHERE (${dcA}) >= ? AND (${dcA}) <= ?
+      ORDER BY s.name, ${dcA} DESC, a.id DESC
+    `).all(f,t);
+    const groups = {};
+    rows.forEach(r => { groups[r.spec_name] = groups[r.spec_name] || []; groups[r.spec_name].push(r); });
+    appointments = Object.keys(groups).sort().map(k => ({ spec_name: k, items: groups[k] }));
+  }
+
+  // Services: allow doctor filter, group by doctor, sort by patient or date (requires period)
+  if ((!type || type==='services') && hasRange) {
+    let whereAdd = `(${dcS}) >= ? AND (${dcS}) <= ?`;
+    const params = [f,t];
+    if (doctor_id) { whereAdd += ' AND a.doctor_id=?'; params.push(doctor_id); }
+    if (svc_id)    { whereAdd += ' AND va.service_id=?'; params.push(svc_id); }
+    const orderClause = sort === 'patient' ? 'up.name, ${dcS} DESC' : `${dcS} DESC, va.id DESC`;
+    const q = `
+      SELECT va.*, sv.name svc_name, sv.price svc_price,
+             up.name patient_name, ud.name doc_name, d.id doc_id
+      FROM visit_analyses va
+      JOIN services sv ON va.service_id=sv.id
+      JOIN visits v ON va.visit_id=v.id
+      JOIN appointments a ON v.appointment_id=a.id
+      JOIN users up ON a.patient_id=up.id
+      JOIN doctors d ON a.doctor_id=d.id
+      JOIN users ud ON d.user_id=ud.id
+      WHERE ${whereAdd}
+      ORDER BY ${orderClause}
+    `;
+    const qFinal = q.replace(/\$\{dcS\}/g, dcS);
+    const rows = db.prepare(qFinal).all(...params);
+    if (group_by === 'doctor') {
+      const groups = {};
+      rows.forEach(r => { groups[r.doc_name] = groups[r.doc_name] || []; groups[r.doc_name].push(r); });
+      services = Object.keys(groups).sort().map(k => ({ doc_name: k, items: groups[k] }));
+    } else {
+      services = rows;
     }
   }
+
+  // Issued referrals: period optional; allow filter/group by analysis (service)
+  if (!type || type==='issued_referrals') {
+    let sql = `
+      SELECT va.*, sv.name svc_name, sv.price svc_price,
+             up.name patient_name, up.id patient_id,
+             ud.name doc_name, ud.id doc_id
+      FROM visit_analyses va
+      JOIN services sv ON va.service_id=sv.id
+      JOIN visits v ON va.visit_id=v.id
+      JOIN appointments a ON v.appointment_id=a.id
+      JOIN users up ON a.patient_id=up.id
+      JOIN doctors d ON a.doctor_id=d.id
+      JOIN users ud ON d.user_id=ud.id
+      WHERE 1=1`;
+    const irParams = [];
+    if (hasRange) {
+      sql += ` AND (substr(va.date_assigned,7,4)||substr(va.date_assigned,4,2)||substr(va.date_assigned,1,2)) >= ? AND (substr(va.date_assigned,7,4)||substr(va.date_assigned,4,2)||substr(va.date_assigned,1,2)) <= ?`;
+      irParams.push(f, t);
+    }
+    if (svc_id) {
+      sql += ` AND va.service_id=?`;
+      irParams.push(svc_id);
+    }
+    sql += ` ORDER BY substr(va.date_assigned,7,4)||substr(va.date_assigned,4,2)||substr(va.date_assigned,1,2) DESC, va.id DESC`;
+    const rows = db.prepare(sql).all(...irParams);
+    if (group_by === 'analysis') {
+      const groups = {};
+      rows.forEach(r => { groups[r.svc_name] = groups[r.svc_name] || []; groups[r.svc_name].push(r); });
+      issued_referrals = Object.keys(groups).sort().map(k => ({ svc_name: k, items: groups[k] }));
+    } else {
+      issued_referrals = rows;
+    }
+  }
+
+  // Doctor revenue: period optional; allow filter/group by specialization
+  if (!type || type==='doctor_revenue') {
+    let apptOnClause = `a.doctor_id=d.id`;
+    if (hasRange) {
+      apptOnClause += ` AND (substr(a.datetime,7,4)||substr(a.datetime,4,2)||substr(a.datetime,1,2)) >= ? AND (substr(a.datetime,7,4)||substr(a.datetime,4,2)||substr(a.datetime,1,2)) <= ?`;
+    }
+    let sql = `
+      SELECT ud.id doc_id, ud.name doc_name, s.name spec_name,
+             COUNT(DISTINCT a.id) visit_count,
+             COALESCE(SUM(ch.amount), 0) total_revenue
+      FROM doctors d
+      JOIN users ud ON d.user_id=ud.id
+      JOIN specializations s ON d.spec_id=s.id
+      LEFT JOIN appointments a ON ${apptOnClause}`;
+    const drParams = [];
+    if (hasRange) {
+      drParams.push(f, t);
+    }
+    sql += `
+      LEFT JOIN contracts c ON c.patient_id=a.patient_id AND a.id IS NOT NULL
+      LEFT JOIN receipts r ON r.contract_id=c.id
+      LEFT JOIN checks ch ON ch.receipt_id=r.id
+      WHERE 1=1`;
+    if (spec_id) {
+      sql += ` AND s.id=?`;
+      drParams.push(spec_id);
+    }
+    sql += ` GROUP BY d.id, ud.name, s.name ORDER BY total_revenue DESC, ud.name`;
+    const rows = db.prepare(sql).all(...drParams);
+    if (group_by === 'specialization') {
+      const groups = {};
+      rows.forEach(r => { groups[r.spec_name] = groups[r.spec_name] || []; groups[r.spec_name].push(r); });
+      doctor_revenue = Object.keys(groups).sort().map(k => ({ spec_name: k, items: groups[k] }));
+    } else {
+      doctor_revenue = rows;
+    }
+  }
+
   const fmt = d => d ? d.split('-').reverse().join('.') : '';
-  res.render('reports/index', { from, to, type, appointments, services, issued_referrals, doctor_revenue, fmt });
+  res.render('reports/index', { from, to, type, appointments, services, issued_referrals, doctor_revenue, fmt, query:req.query, doctors, servicesList, specs, hasRange });
+});
+
+// Printable referral (Направление к врачу)
+app.get('/print/referral/:id', auth, (req,res) => {
+  const appt = db.prepare(`
+    SELECT a.*, up.name patient_name, up.phone patient_phone, up.dob patient_dob, up.address patient_address,
+           ud.name doc_name, s.name spec_name
+    FROM appointments a
+    JOIN users up ON a.patient_id=up.id
+    JOIN doctors d ON a.doctor_id=d.id
+    JOIN users ud ON d.user_id=ud.id
+    JOIN specializations s ON d.spec_id=s.id
+    WHERE a.id=?
+  `).get(req.params.id);
+  if (!appt) return res.status(404).send('Not found');
+  // Prepare printable datetime in readable format
+  appt.formatted_datetime = formatApptDatetime(appt.datetime);
+  res.render('print/referral', { appt });
 });
 
 // ══════════════════════════════════════════════════════════════

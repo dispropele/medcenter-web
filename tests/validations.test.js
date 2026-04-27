@@ -36,6 +36,15 @@ describe('Validations Tests', () => {
     const adminOnly = (req, res, next) => req.session.user?.role === 'admin' ? next() : res.redirect('/dashboard');
     const staffOnly = (req, res, next) => ['admin', 'doctor'].includes(req.session.user?.role) ? next() : res.redirect('/dashboard');
     const safe = (v) => (v === undefined || v === null) ? null : v;
+    const toISO = (dateStr) => {
+      if (!dateStr) return dateStr;
+      if (dateStr.includes('-')) return dateStr;
+      const parts = dateStr.split('.');
+      const d = String(parts[0]||'').padStart(2,'0');
+      const m = String(parts[1]||'').padStart(2,'0');
+      const y = parts[2]||'';
+      return `${y}-${m}-${d}`;
+    };
 
     // Login
     app.post('/login', (req, res) => {
@@ -90,8 +99,9 @@ describe('Validations Tests', () => {
       if (!patient_id) return res.status(400).json({ error: 'Выберите пациента' });
       if (!date) return res.status(400).json({ error: 'Укажите дату' });
       
-      const today = new Date().toISOString().split('T')[0];
-      const contractDate = date.includes('-') ? date : date.split('.').reverse().join('-');
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+      const contractDate = toISO(date);
       if (contractDate > today) return res.status(400).json({ error: 'Дата не может быть больше текущей' });
       
       const cid = db.prepare('INSERT INTO contracts(patient_id,total,date) VALUES(?,?,?)').run(patient_id, parseFloat(total) || 0, date).lastInsertRowid;
@@ -190,8 +200,9 @@ describe('Validations Tests', () => {
       const amountNum = parseFloat(amount) || 0;
       if (amountNum <= 0) return res.status(400).json({ error: 'Сумма должна быть больше нуля' });
       
-      const today = new Date().toISOString().split('T')[0];
-      const checkDate = date.includes('-') ? date : date.split('.').reverse().join('-');
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+      const checkDate = toISO(date);
       if (checkDate > today) return res.status(400).json({ error: 'Дата не может быть в будущем' });
       
       const receipt = db.prepare('SELECT amount FROM receipts WHERE id=?').get(receipt_id);

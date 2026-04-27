@@ -1,0 +1,28 @@
+<%- include('../partials/header',{title:'Направление к врачу',ap:''}) %>
+<style>
+  .referral { max-width:800px;margin:20px auto;padding:20px;border:1px solid #000;font-family:Arial,serif }
+  .referral h1{ text-align:center;font-size:18px;margin-bottom:8px }
+  .field { display:flex;gap:10px;margin:8px 0 }
+  .label { width:240px;font-weight:600 }
+  .underline { border-bottom:1px solid #000;flex:1;padding:6px 4px }
+  .footer { margin-top:20px;display:flex;justify-content:space-between }
+</style>
+<div class="page">
+  <div class="referral">
+    <h1>Направление к врачу</h1>
+    <% let idx = 1; %>
+    <div class="field"><div class="label"><%= idx++ %>. ФИО пациента</div><div class="underline"><%=appt.patient_name%></div></div>
+    <% if (appt.patient_address) { %>
+    <div class="field"><div class="label"><%= idx++ %>. Адрес / карта №</div><div class="underline"><%=appt.patient_address%></div></div>
+    <% } %>
+    <div class="field"><div class="label"><%= idx++ %>. Явиться</div><div class="underline"><%= appt.formatted_datetime || '' %></div></div>
+    <div class="field"><div class="label"><%= idx++ %>. К врачу</div><div class="underline"><%=appt.doc_name%> — <%=appt.spec_name%></div></div>
+    <div class="field"><div class="label"><%= idx++ %>. Повод обращения</div><div class="underline"><%= appt.notes || '' %></div></div>
+    <div class="footer">
+      <div>Подпись врача ____________________</div>
+      <div>М.П.</div>
+    </div>
+  </div>
+</div>
+<script>window.print()</script>
+<%- include('../partials/footer') %>
