@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Квитанция №<%= receipt.id %></title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=PT+Serif:ital,wght@0,400;0,700;1,400&family=PT+Sans:wght@400;700&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'PT Sans', Arial, sans-serif;
+      font-size: 11pt;
+      background: #f0f0f0;
+      color: #000;
+    }
+
+    /* ── Screen wrapper ── */
+    .screen-wrap {
+      max-width: 820px;
+      margin: 24px auto;
+      background: #fff;
+      box-shadow: 0 4px 24px rgba(0,0,0,.18);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .screen-toolbar {
+      background: #1565C0;
+      padding: 10px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .screen-toolbar span {
+      color: rgba(255,255,255,.9);
+      font-size: 13px;
+    }
+    .screen-toolbar .btn-group {
+      display: flex;
+      gap: 8px;
+    }
+    .screen-toolbar button, .screen-toolbar a {
+      padding: 6px 14px;
+      border-radius: 5px;
+      font-size: 12px;
+      cursor: pointer;
+      border: none;
+      font-family: 'PT Sans', sans-serif;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .btn-print  { background: #fff; color: #1565C0; font-weight: 700; }
+    .btn-close  { background: rgba(255,255,255,.18); color: #fff; border: 1px solid rgba(255,255,255,.35) !important; }
+
+    /* ── Receipt paper ── */
+    .receipt-paper {
+      padding: 20px 28px 28px;
+    }
+
+    /* ── Header block ── */
+    .header-block {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 10px;
+      gap: 16px;
+    }
+    .org-info {
+      flex: 1;
+    }
+    .org-name {
+      font-family: 'PT Serif', serif;
+      font-size: 13pt;
+      font-weight: 700;
+      line-height: 1.3;
+    }
+    .org-meta {
+      font-size: 7.5pt;
+      color: #555;
+      margin-top: 1px;
+    }
+    .org-meta strong {
+      font-size: 8.5pt;
+      color: #000;
+    }
+    .org-label {
+      font-size: 7pt;
+      color: #888;
+      border-bottom: 0.5pt solid #ccc;
+      margin-bottom: 2px;
+    }
+
+    /* Угловой штамп с номером */
+    .receipt-stamp {
+      flex: 0 0 160px;
+      border: 1px solid #aaa;
+      min-height: 64px;
+    }
+    .stamp-row {
+      display: flex;
+      border-bottom: 0.5pt solid #aaa;
+    }
+    .stamp-row:last-child { border-bottom: none; }
+    .stamp-cell {
+      flex: 1;
+      padding: 4px 7px;
+      font-size: 9pt;
+      border-right: 0.5pt solid #aaa;
+    }
+    .stamp-cell:last-child { border-right: none; }
+    .stamp-label {
+      font-size: 7pt;
+      color: #888;
+      display: block;
+    }
+
+    /* Разделитель */
+    .divider-line {
+      border: none;
+      border-top: 1pt solid #000;
+      margin: 7px 0 5px;
+    }
+    .divider-thin {
+      border: none;
+      border-top: 0.5pt solid #ccc;
+      margin: 4px 0;
+    }
+
+    /* ── Заголовок квитанции ── */
+    .receipt-title-block {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-bottom: 8px;
+    }
+    .receipt-title {
+      font-family: 'PT Serif', serif;
+      font-size: 13pt;
+      font-weight: 700;
+      line-height: 1.3;
+    }
+    .receipt-series {
+      font-size: 9.5pt;
+      margin-top: 2px;
+    }
+    .receipt-date {
+      font-size: 10pt;
+      white-space: nowrap;
+      display: flex;
+      align-items: baseline;
+      gap: 5px;
+    }
+    .date-day {
+      font-size: 14pt;
+      font-family: 'PT Serif', serif;
+      font-weight: 700;
+      border-bottom: 1pt solid #000;
+      min-width: 36px;
+      text-align: center;
+    }
+    .date-month {
+      font-size: 10pt;
+      border-bottom: 1pt solid #000;
+      min-width: 80px;
+      text-align: center;
+    }
+    .date-year {
+      font-size: 10pt;
+    }
+
+    /* ── Поля плательщика ── */
+    .field-row {
+      display: flex;
+      align-items: baseline;
+      margin-bottom: 5px;
+      gap: 6px;
+    }
+    .field-label {
+      font-size: 9.5pt;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .field-value {
+      flex: 1;
+      font-size: 9.5pt;
+      font-weight: 700;
+      border-bottom: 0.5pt solid #555;
+      padding: 1px 4px;
+      min-width: 60px;
+    }
+    .field-sublabel {
+      font-size: 7pt;
+      color: #888;
+      text-align: center;
+      width: 100%;
+      margin-top: -1px;
+      margin-bottom: 3px;
+      padding-left: 4px;
+    }
+
+    /* ── Таблица услуг ── */
+    .services-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 8px 0;
+      font-size: 9pt;
+    }
+    .services-table th, .services-table td {
+      border: 0.5pt solid #555;
+      padding: 4px 6px;
+      vertical-align: middle;
+    }
+    .services-table th {
+      background: #f4f4f4;
+      text-align: center;
+      font-size: 8.5pt;
+      font-weight: 700;
+      line-height: 1.3;
+    }
+    .services-table td {
+      font-size: 9pt;
+    }
+    .col-num   { width: 28px; text-align: center; }
+    .col-name  { text-align: left; }
+    .col-qty   { width: 44px; text-align: center; }
+    .col-unit  { width: 52px; text-align: center; }
+    .col-price { width: 78px; text-align: right; }
+    .col-sum   { width: 78px; text-align: right; font-weight: 700; }
+    .row-empty td { height: 16px; }
+    .row-total td {
+      border-top: 1pt solid #555;
+      font-weight: 700;
+      font-size: 10pt;
+    }
+
+    /* ── Итоговый блок ── */
+    .totals-block {
+      margin-top: 6px;
+    }
+    .total-row {
+      display: flex;
+      align-items: baseline;
+      margin-bottom: 4px;
+      gap: 6px;
+    }
+    .total-label {
+      font-size: 9.5pt;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .total-value {
+      flex: 1;
+      font-size: 9.5pt;
+      border-bottom: 0.5pt solid #555;
+      padding: 1px 4px;
+      font-style: italic;
+    }
+    .total-currency {
+      font-size: 9.5pt;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .sublabel-row {
+      display: flex;
+      margin-bottom: 5px;
+    }
+    .sublabel-spacer {
+      flex-shrink: 0;
+    }
+    .sublabel-text {
+      flex: 1;
+      font-size: 7pt;
+      color: #888;
+      text-align: center;
+    }
+
+    /* ── Подписи ── */
+    .sign-block {
+      margin-top: 10px;
+    }
+    .sign-row {
+      display: flex;
+      align-items: baseline;
+      margin-bottom: 5px;
+      gap: 8px;
+    }
+    .sign-label {
+      font-size: 9.5pt;
+      flex-shrink: 0;
+    }
+    .sign-line {
+      flex: 1;
+      border-bottom: 0.5pt solid #555;
+      min-width: 100px;
+      padding: 1px 4px;
+      font-size: 9pt;
+    }
+    .sign-sublabel {
+      font-size: 7pt;
+      color: #888;
+      text-align: center;
+      flex: 1;
+      margin-top: -1px;
+      margin-bottom: 4px;
+    }
+    .sign-row-labels {
+      display: flex;
+      margin-bottom: 6px;
+    }
+    .sign-row-labels .s-l { font-size: 7pt; color: #888; text-align: center; }
+
+    .mp-row {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .mp-box {
+      font-size: 11pt;
+      font-weight: 700;
+      border: 1pt solid #555;
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .mp-date {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      font-size: 9.5pt;
+    }
+    .mp-quote { font-size: 12pt; }
+    .mp-blank { border-bottom: 0.5pt solid #555; min-width: 44px; padding: 0 4px; }
+    .mp-year  { font-size: 9.5pt; }
+
+    /* ── Нижний колонтитул ── */
+    .receipt-footer {
+      margin-top: 10px;
+      padding-top: 6px;
+      border-top: 0.5pt solid #ccc;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .footer-resp {
+      font-size: 9pt;
+      line-height: 1.4;
+      max-width: 50%;
+    }
+    .footer-resp .resp-line {
+      border-bottom: 0.5pt solid #555;
+      min-width: 200px;
+      padding: 1px 4px;
+      font-size: 8pt;
+      color: #444;
+    }
+    .footer-info {
+      font-size: 7pt;
+      color: #888;
+      text-align: right;
+      line-height: 1.7;
+    }
+
+    /* ── Watermark ── */
+    .watermark {
+      pointer-events: none;
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%) rotate(-35deg);
+      font-size: 72pt;
+      font-family: 'PT Serif', serif;
+      font-weight: 700;
+      color: rgba(21,101,192,.06);
+      white-space: nowrap;
+      user-select: none;
+      z-index: 0;
+    }
+    .receipt-paper { position: relative; }
+    .receipt-paper > * { position: relative; z-index: 1; }
+
+    /* ── Print ── */
+    @media print {
+      body { background: #fff; }
+      .screen-wrap { box-shadow: none; margin: 0; border-radius: 0; }
+      .screen-toolbar { display: none !important; }
+      .receipt-paper { padding: 10px 16px 20px; }
+      @page { margin: 10mm 12mm; size: A4; }
+    }
+  </style>
+</head>
+<body>
+<%
+  function parseDate(ds) {
+    if (!ds) return {};
+    var parts;
+    if (ds.includes('.')) {
+      parts = ds.split('.');
+      return { day: parts[0], month: monthName(parseInt(parts[1],10)), year: parts[2] };
+    }
+    var d = new Date(ds);
+    if (isNaN(d)) return {};
+    return {
+      day: String(d.getDate()).padStart(2,'0'),
+      month: monthName(d.getMonth()+1),
+      year: String(d.getFullYear())
+    };
+  }
+  function monthName(m) {
+    var ms = ['января','февраля','марта','апреля','мая','июня',
+               'июля','августа','сентября','октября','ноября','декабря'];
+    return ms[m-1] || '';
+  }
+  function fmt(ds) {
+    if (!ds) return '—';
+    if (ds.includes('.')) return ds;
+    var d = new Date(ds);
+    if (isNaN(d)) return ds;
+    return String(d.getDate()).padStart(2,'0')+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+d.getFullYear();
+  }
+  function numWords(n) {
+    n = Math.round(parseFloat(n)||0);
+    if (n === 0) return 'Ноль рублей 00 коп.';
+    var units = ['','один','два','три','четыре','пять','шесть','семь','восемь','девять'];
+    var tens  = ['','десять','двадцать','тридцать','сорок','пятьдесят','шестьдесят','семьдесят','восемьдесят','девяносто'];
+    var hunds = ['','сто','двести','триста','четыреста','пятьсот','шестьсот','семьсот','восемьсот','девятьсот'];
+    var teens = ['десять','одиннадцать','двенадцать','тринадцать','четырнадцать','пятнадцать','шестнадцать','семнадцать','восемнадцать','девятнадцать'];
+    function chunk(num, fem) {
+      var h = Math.floor(num/100), t = Math.floor((num%100)/10), u = num%10;
+      var r = [];
+      if (h) r.push(hunds[h]);
+      if (t===1) { r.push(teens[u]); }
+      else {
+        if (t) r.push(tens[t]);
+        if (u) {
+          if (fem && u===1) r.push('одна');
+          else if (fem && u===2) r.push('две');
+          else r.push(units[u]);
+        }
+      }
+      return r;
+    }
+    var th = Math.floor(n/1000), ru = n%1000;
+    var parts = [];
+    if (th) {
+      var tp = chunk(th, true);
+      var tu = th%10, tt = Math.floor((th%100)/10);
+      var tsuf = (tt===1) ? 'тысяч' : (tu===1) ? 'тысяча' : (tu>=2&&tu<=4) ? 'тысячи' : 'тысяч';
+      parts = parts.concat(tp); parts.push(tsuf);
+    }
+    if (ru || !th) {
+      var rp = chunk(ru, false);
+      var ruu = ru%10, rtt = Math.floor((ru%100)/10);
+      var rsuf = (rtt===1) ? 'рублей' : (ruu===1) ? 'рубль' : (ruu>=2&&ruu<=4) ? 'рубля' : 'рублей';
+      parts = parts.concat(rp); parts.push(rsuf);
+    }
+    parts.push('00 коп.');
+    return parts.join(' ').replace(/\s+/g,' ').trim();
+    // Capitalize
+  }
+  function capitalize(s) { return s ? s.charAt(0).toUpperCase()+s.slice(1) : s; }
+
+  var rd = parseDate(receipt.date);
+  var total = services.reduce(function(s,sv){ return s + (parseFloat(sv.price)||0)*(parseInt(sv.qty)||1); }, 0);
+  var cashAmount = 0, cardAmount = 0;
+  (checks||[]).forEach(function(c){
+    if (c.payment_method==='Карта' || c.payment_method==='Перевод') cardAmount += parseFloat(c.amount)||0;
+    else cashAmount += parseFloat(c.amount)||0;
+  });
+  // Fill empty rows to at least 5
+  var emptyRows = Math.max(0, 5 - services.length);
+
+  // Determine series from receipt id
+  var seriesNum = 'АК ' + String(receipt.id).padStart(6,'0');
+%>
+
+<div class="screen-wrap">
+  <div class="screen-toolbar">
+    <span>🖨 Квитанция №<%= receipt.id %> — <%= receipt.patient_name %></span>
+    <div class="btn-group">
+      <button class="btn-print" onclick="window.print()">🖨 Распечатать</button>
+      <a class="btn-close" href="/receipts/<%= receipt.id %>">✕ Закрыть</a>
+    </div>
+  </div>
+
+  <div class="receipt-paper">
+    <div class="watermark">DEV SEO</div>
+
+    <!-- ═══ ШАПКА ═══ -->
+    <div class="header-block">
+      <div class="org-info">
+        <div class="org-label">полное или сокращённое наименование организации</div>
+        <div class="org-name">ООО «DEV SEO»</div>
+      </div>
+      <div class="receipt-stamp">
+        <div class="stamp-row">
+          <div class="stamp-cell">
+            <span class="stamp-label">Квитанция №</span>
+            <strong><%= receipt.id %></strong>
+          </div>
+        </div>
+        <div class="stamp-row">
+          <div class="stamp-cell">
+            <span class="stamp-label">Договор №</span>
+            <strong><%= receipt.contract_id %></strong>
+          </div>
+        </div>
+        <div class="stamp-row">
+          <div class="stamp-cell">
+            <span class="stamp-label">Статус</span>
+            <span style="font-size:8pt;color:<%= receipt.status==='Оплачено'?'#2E7D32':'#E65100' %>">
+              <%= receipt.status %>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <hr class="divider-line">
+
+    <!-- ═══ ЗАГОЛОВОК ═══ -->
+    <div class="receipt-title-block">
+      <div>
+        <div class="receipt-title">Квитанция на оплату медицинских услуг</div>
+      </div>
+      <div class="receipt-date">
+        «<span class="date-day"><%= rd.day||'&nbsp;&nbsp;&nbsp;' %></span>»
+        <span class="date-month"><%= rd.month||'' %></span>
+        &nbsp;20<span class="date-year"><%= rd.year ? rd.year.slice(-2) : '&nbsp;&nbsp;' %></span> г.
+      </div>
+    </div>
+
+    <!-- ═══ ПОЛЯ ═══ -->
+    <div class="field-row">
+      <span class="field-label">Пациент (Ф.И.О.)</span>
+      <span class="field-value"><%= receipt.patient_name %></span>
+    </div>
+
+    <div class="field-row">
+      <span class="field-label">Регистрационный № (№ медицинской карты)</span>
+      <span class="field-value"><%= receipt.contract_id %></span>
+    </div>
+
+    <!-- ═══ ТАБЛИЦА УСЛУГ ═══ -->
+    <table class="services-table">
+      <thead>
+        <tr>
+          <th class="col-num">№</th>
+          <th class="col-name">Вид услуги</th>
+          <th class="col-qty">Кол-во</th>
+          <th class="col-price">Цена (руб.)<br>за единицу</th>
+          <th class="col-sum">Сумма (руб.)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% services.forEach(function(sv, i) {
+          var rowSum = (parseFloat(sv.price)||0) * (parseInt(sv.qty)||1);
+        %>
+        <tr>
+          <td class="col-num"><%= i+1 %></td>
+          <td class="col-name"><%= sv.svc_name %></td>
+          <td class="col-qty"><%= sv.qty %></td>
+          <td class="col-price"><%= Number(parseFloat(sv.price)).toLocaleString('ru') %></td>
+          <td class="col-sum"><%= Number(rowSum).toLocaleString('ru') %></td>
+        </tr>
+        <% }) %>
+        <% for(var e=0; e<emptyRows; e++) { %>
+        <tr class="row-empty"><td>&nbsp;</td><td></td><td></td><td></td><td></td></tr>
+        <% } %>
+        <tr class="row-total">
+          <td colspan="4" style="text-align:right;padding-right:10px">Итого</td>
+          <td class="col-sum"><%= Number(total).toLocaleString('ru') %></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- ═══ ИТОГИ ═══ -->
+    <div class="totals-block">
+      <div class="total-row">
+        <span class="total-label">Итого оплачено плательщиком:</span>
+        <span class="total-value"><%= capitalize(numWords(total)) %></span>
+        <span class="total-currency"><%= Number(total).toLocaleString('ru') %> руб.</span>
+      </div>
+      <div class="sublabel-row">
+        <span class="sublabel-spacer" style="width:230px">&nbsp;</span>
+        <span class="sublabel-text">(сумма прописью)</span>
+      </div>
+
+      <div class="total-row">
+        <span class="total-label">наличными денежными средствами</span>
+        <span class="total-value"><% if(cashAmount>0){ %><%= capitalize(numWords(cashAmount)) %><% } else { %>&nbsp;<% } %></span>
+        <span class="total-currency"><% if(cashAmount>0){ %><%= Number(cashAmount).toLocaleString('ru') %><% } %> руб.</span>
+      </div>
+      <div class="sublabel-row">
+        <span class="sublabel-spacer" style="width:230px">&nbsp;</span>
+        <span class="sublabel-text">(сумма прописью)</span>
+      </div>
+
+      <div class="total-row">
+        <span class="total-label">с использованием платёжной карты</span>
+        <span class="total-value"><% if(cardAmount>0){ %><%= capitalize(numWords(cardAmount)) %><% } else { %>&nbsp;<% } %></span>
+        <span class="total-currency"><% if(cardAmount>0){ %><%= Number(cardAmount).toLocaleString('ru') %><% } %> руб.</span>
+      </div>
+      <div class="sublabel-row">
+        <span class="sublabel-spacer" style="width:230px">&nbsp;</span>
+        <span class="sublabel-text">(сумма прописью)</span>
+      </div>
+    </div>
+
+    <!-- ═══ ПОДПИСИ ═══ -->
+    <div class="sign-block">
+      <div class="sign-row">
+        <span class="sign-label" style="max-width:220px;line-height:1.3">Получено лицом, ответственным<br>за совершение операции</span>
+        <span class="sign-line">&nbsp;</span>
+        <span style="font-size:9pt;padding:0 8px">&nbsp;</span>
+        <span class="sign-line" style="flex:3">&nbsp;</span>
+      </div>
+      <div class="sign-row-labels">
+        <span style="width:222px">&nbsp;</span>
+        <span class="s-l" style="flex:1">(подпись)</span>
+        <span style="width:16px">&nbsp;</span>
+        <span class="s-l" style="flex:3">(должность, ФИО, подпись работника организации)</span>
+      </div>
+    </div>
+
+    <!-- ═══ М.П. + ДАТА ═══ -->
+    <div class="mp-row">
+      <div class="mp-box">М.П.</div>
+      <div class="mp-date">
+        <span class="mp-quote">«</span>
+        <span class="mp-blank"><%= rd.day||'&nbsp;&nbsp;&nbsp;' %></span>
+        <span class="mp-quote">»</span>
+        &nbsp;___________&nbsp;
+        20<span class="mp-blank"><%= rd.year ? rd.year.slice(-2) : '&nbsp;&nbsp;' %></span> г.
+      </div>
+      <span style="font-size:7pt;color:#888;margin-left:6px">(дата)</span>
+    </div>
+
+    <!-- ═══ НИЖНИЙ КОЛОНТИТУЛ ═══ -->
+    <div class="receipt-footer">
+      <div class="footer-resp">
+        <div style="font-size:8pt;margin-bottom:3px">Отпечатано ООО «DEV SEO» (автоматически)</div>
+        <div style="font-size:7pt;color:#888">Договор №<%= receipt.contract_id %> от <%= fmt(receipt.contract_date) %></div>
+      </div>
+      <div class="footer-info">
+        <div>Документ сформирован: <%= fmt(new Date().toISOString().slice(0,10)) %></div>
+        <div>Квитанция №<%= receipt.id %> · Серия АК</div>
+      </div>
+    </div>
+  </div><!-- /.receipt-paper -->
+</div><!-- /.screen-wrap -->
+
+<script>
+  // Auto-print if ?print=1 in URL
+  if (new URLSearchParams(location.search).get('print') === '1') {
+    window.onload = function() { window.print(); };
+  }
+</script>
+</body>
+</html>

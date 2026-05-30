@@ -806,6 +806,31 @@ app.get('/print/referral/:id', auth, (req,res) => {
   res.render('print/referral', { appt });
 });
 
+app.get('/print/receipt/:id', auth, (req, res) => {
+  const receipt = db.prepare(`
+    SELECT r.*, u.name patient_name, c.date contract_date, c.id contract_id
+    FROM receipts r
+    JOIN contracts c ON r.contract_id = c.id
+    JOIN users u ON c.patient_id = u.id
+    WHERE r.id = ?
+  `).get(req.params.id);
+  if (!receipt) return res.status(404).send('Квитанция не найдена');
+
+  const services = db.prepare(`
+    SELECT rs.*, sv.name svc_name, sv.description svc_desc
+    FROM receipt_services rs
+    JOIN services sv ON rs.service_id = sv.id
+    WHERE rs.receipt_id = ?
+    ORDER BY sv.name
+  `).all(req.params.id);
+
+  const checks = db.prepare(
+    'SELECT * FROM checks WHERE receipt_id = ? ORDER BY date DESC'
+  ).all(req.params.id);
+
+  res.render('print/receipt', { receipt, services, checks });
+});
+
 // ══════════════════════════════════════════════════════════════
 // START
 // ══════════════════════════════════════════════════════════════

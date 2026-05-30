@@ -20,7 +20,7 @@
   <div class="page-header">
     <h1>Квитанция №<%=receipt.id%></h1>
     <div style="display:flex;gap:8px">
-      <button onclick="window.print()" class="btn btn-outline">🖨 Печать</button>
+      <a href="/print/receipt/<%=receipt.id%>" target="_blank" class="btn btn-primary">🖨 Печать квитанции</a>
       <a href="/receipts" class="btn btn-outline">← Назад</a>
     </div>
   </div>
@@ -31,6 +31,7 @@
         <div class="card-header"><h2>Данные квитанции</h2></div>
         <dl class="info-list">
           <dt>Пациент</dt><dd><strong><%=receipt.patient_name%></strong></dd>
+          <dt>Договор</dt><dd><a href="/contracts/<%=receipt.contract_id%>">№<%=receipt.contract_id%></a></dd>
           <dt>Дата</dt><dd><%= formatDateTime(receipt.date) %></dd>
           <dt>Сумма</dt><dd><strong><%=Number(receipt.amount).toLocaleString('ru')%> ₽</strong></dd>
           <dt>Статус</dt>
@@ -109,6 +110,19 @@
             <button class="btn btn-primary btn-sm">Провести оплату</button>
           </form>
         </details>
+      </div>
+
+      <!-- Быстрый предпросмотр печатной формы -->
+      <div style="padding:12px 16px;border-top:1px solid var(--border);background:#F8FAFF;border-radius:0 0 10px 10px">
+        <p style="font-size:12.5px;color:var(--text-m);margin-bottom:8px">
+          📄 Печатная форма в формате бланка квитанции на оплату медицинских услуг
+        </p>
+        <a href="/print/receipt/<%=receipt.id%>" target="_blank" class="btn btn-outline btn-sm">
+          Открыть для печати
+        </a>
+        <a href="/print/receipt/<%=receipt.id%>?print=1" target="_blank" class="btn btn-primary btn-sm" style="margin-left:6px">
+          Сразу на принтер
+        </a>
       </div>
     </div>
   </div>
