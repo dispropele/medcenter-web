@@ -838,7 +838,7 @@ require('./db/database')().then(database => {
   db = database;
   const PORT = process.env.PORT || 3000;
   app.listen(PORT, () => {
-    console.log(`\n  ✓  МедЦентр: http://localhost:${PORT}`);
+    console.log(`\n  ✓  DEV SEO: http://localhost:${PORT}`);
     console.log('  admin@medcenter.ru / admin123');
     console.log('  ivanov.p@mail.ru / 123456\n');
   });
