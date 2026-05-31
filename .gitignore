@@ -1,5 +1,4 @@
 node_modules/
-*.db
 *.log
 .DS_Store
 coverage/

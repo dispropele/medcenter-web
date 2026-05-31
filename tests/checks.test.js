@@ -58,10 +58,21 @@ describe('Checks Tests', () => {
       if (!receipt_id || !amount || !date)
         return res.status(400).json({ error: 'Missing required fields' });
 
-      db.prepare('INSERT INTO checks(receipt_id,amount,date,payment_method) VALUES(?,?,?,?)')
-        .run(receipt_id, parseFloat(amount) || 0, date, payment_method);
+      const amountNum = parseFloat(amount) || 0;
+      const receipt = db.prepare('SELECT amount FROM receipts WHERE id=?').get(receipt_id);
+      if (!receipt) return res.status(400).json({ error: 'Unknown receipt' });
 
-      db.prepare("UPDATE receipts SET status='Оплачено' WHERE id=?").run(receipt_id);
+      const paidSoFar = db.prepare('SELECT COALESCE(SUM(amount),0) s FROM checks WHERE receipt_id=?').get(receipt_id).s;
+      if (amountNum + paidSoFar > receipt.amount) return res.status(400).json({ error: 'Overpayment' });
+
+      db.prepare('INSERT INTO checks(receipt_id,amount,date,payment_method) VALUES(?,?,?,?)')
+        .run(receipt_id, amountNum, date, payment_method);
+
+      const newPaidTotal = db.prepare('SELECT COALESCE(SUM(amount),0) s FROM checks WHERE receipt_id=?').get(receipt_id).s;
+      db.prepare('UPDATE receipts SET status=? WHERE id=?').run(
+        newPaidTotal >= receipt.amount ? 'Оплачено' : 'Ожидает оплаты',
+        receipt_id
+      );
 
       res.json({ success: true });
     });
@@ -97,7 +108,7 @@ describe('Checks Tests', () => {
     expect(res.body.success).toBe(true);
   });
 
-  test('POST /checks - should update receipt status to Оплачено', async () => {
+  test('POST /checks - should keep receipt Ожидает оплаты when payment is partial', async () => {
     await adminAgent.post('/checks')
       .send({
         receipt_id: 2,
@@ -107,7 +118,7 @@ describe('Checks Tests', () => {
       });
 
     const receipt = db.prepare('SELECT * FROM receipts WHERE id=?').get(2);
-    expect(receipt.status).toBe('Оплачено');
+    expect(receipt.status).toBe('Ожидает оплаты');
   });
 
   test('POST /checks - should accept different payment methods', async () => {

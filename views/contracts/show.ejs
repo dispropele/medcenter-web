@@ -50,7 +50,7 @@
             <td><%= formatDateTime(r.date) %></td>
             <td><strong><%=Number(r.amount).toLocaleString('ru')%> ₽</strong></td>
             <td><span class="badge badge-<%=r.status==='Оплачено'?'success':'warning'%>"><%=r.status%></span></td>
-            <td><%-r.paid>0?'<span class="badge badge-success">Да</span>':'<span class="badge badge-gray">Нет</span>'%></td>
+            <td><%- r.fully_paid == 1 ? '<span class="badge badge-success">Да</span>' : '<span class="badge badge-gray">Нет</span>' %></td>
             <td><a href="/receipts/<%=r.id%>" class="btn btn-sm btn-outline">Открыть</a></td>
           </tr>
           <%})%>

@@ -52,6 +52,19 @@ const formatApptDatetime = (dt) => {
   return `${day}.${month}.${year} ${hours}:${mins}`;
 };
 
+const syncReceiptStatus = (receipt_id) => {
+  const receipt = db.prepare('SELECT amount FROM receipts WHERE id=?').get(receipt_id);
+  if (!receipt) return;
+  const paid = db.prepare('SELECT COALESCE(SUM(amount),0) s FROM checks WHERE receipt_id=?').get(receipt_id).s;
+  const status = paid >= receipt.amount ? 'Оплачено' : 'Ожидает оплаты';
+  db.prepare('UPDATE receipts SET status=? WHERE id=?').run(status, receipt_id);
+};
+
+const syncAllReceiptStatuses = () => {
+  const rows = db.prepare('SELECT id FROM receipts').all();
+  rows.forEach(r => syncReceiptStatus(r.id));
+};
+
 // ══════════════════════════════════════════════════════════════
 // AUTH
 // ══════════════════════════════════════════════════════════════
@@ -343,7 +356,9 @@ app.get('/contracts/:id', auth, adminOnly, (req,res) => {
   `).get(req.params.id);
   if (!contract) return res.redirect('/contracts');
   const receipts = db.prepare(`
-    SELECT r.*, (SELECT COUNT(*) FROM checks WHERE receipt_id=r.id) paid
+    SELECT r.*,
+           COALESCE((SELECT SUM(amount) FROM checks WHERE receipt_id=r.id), 0) paid_amount,
+           CASE WHEN COALESCE((SELECT SUM(amount) FROM checks WHERE receipt_id=r.id), 0) >= r.amount THEN 1 ELSE 0 END fully_paid
     FROM receipts r WHERE r.contract_id=? ORDER BY r.date DESC
   `).all(req.params.id);
   res.render('contracts/show', { contract, receipts });
@@ -355,7 +370,8 @@ app.get('/contracts/:id', auth, adminOnly, (req,res) => {
 app.get('/receipts', auth, adminOnly, (req,res) => {
   const rows = db.prepare(`
     SELECT r.*, u.name patient_name, c.date contract_date,
-           (SELECT COUNT(*) FROM checks WHERE receipt_id=r.id) paid
+           COALESCE((SELECT SUM(amount) FROM checks WHERE receipt_id=r.id), 0) paid_amount,
+           CASE WHEN COALESCE((SELECT SUM(amount) FROM checks WHERE receipt_id=r.id), 0) >= r.amount THEN 1 ELSE 0 END fully_paid
     FROM receipts r
     JOIN contracts c ON r.contract_id=c.id
     JOIN users u ON c.patient_id=u.id
@@ -424,7 +440,9 @@ app.post('/receipts', auth, adminOnly, (req,res) => {
 
 app.get('/receipts/:id', auth, adminOnly, (req,res) => {
   const receipt = db.prepare(`
-    SELECT r.*, u.name patient_name, c.date contract_date
+    SELECT r.*, u.name patient_name, c.date contract_date,
+           COALESCE((SELECT SUM(amount) FROM checks WHERE receipt_id=r.id), 0) paid_amount,
+           CASE WHEN COALESCE((SELECT SUM(amount) FROM checks WHERE receipt_id=r.id), 0) >= r.amount THEN 1 ELSE 0 END fully_paid
     FROM receipts r
     JOIN contracts c ON r.contract_id=c.id
     JOIN users u ON c.patient_id=u.id
@@ -473,7 +491,10 @@ app.post('/checks', auth, adminOnly, (req,res) => {
   
   // Проверка что сумма не превышает сумму квитанции
   const receipt = db.prepare('SELECT amount FROM receipts WHERE id=?').get(receipt_id);
-  if (receipt && amountNum > receipt.amount) return res.redirect('back');
+  if (!receipt) return res.redirect('back');
+
+  const paidSoFar = db.prepare('SELECT COALESCE(SUM(amount),0) s FROM checks WHERE receipt_id=?').get(receipt_id).s;
+  if (amountNum + paidSoFar > receipt.amount) return res.redirect('back');
   
   // Нормализуем формат даты ГГГГ-ММ-ДД => ДД.ММ.ГГГГ
   const normalizedDate = date.includes('-')
@@ -481,7 +502,7 @@ app.post('/checks', auth, adminOnly, (req,res) => {
     : date;
   
   db.prepare('INSERT INTO checks(receipt_id,amount,date,payment_method) VALUES(?,?,?,?)').run(receipt_id, amountNum, normalizedDate, payment_method);
-  db.prepare("UPDATE receipts SET status='Оплачено' WHERE id=?").run(receipt_id);
+  syncReceiptStatus(receipt_id);
   res.redirect('/receipts/'+receipt_id);
 });
 
@@ -808,7 +829,8 @@ app.get('/print/referral/:id', auth, (req,res) => {
 
 app.get('/print/receipt/:id', auth, (req, res) => {
   const receipt = db.prepare(`
-    SELECT r.*, u.name patient_name, c.date contract_date, c.id contract_id
+    SELECT r.*, u.name patient_name, c.date contract_date, c.id contract_id,
+           COALESCE((SELECT SUM(amount) FROM checks WHERE receipt_id=r.id), 0) paid_amount
     FROM receipts r
     JOIN contracts c ON r.contract_id = c.id
     JOIN users u ON c.patient_id = u.id
@@ -836,6 +858,7 @@ app.get('/print/receipt/:id', auth, (req, res) => {
 // ══════════════════════════════════════════════════════════════
 require('./db/database')().then(database => {
   db = database;
+  syncAllReceiptStatuses();
   const PORT = process.env.PORT || 3000;
   app.listen(PORT, () => {
     console.log(`\n  ✓  DEV SEO: http://localhost:${PORT}`);

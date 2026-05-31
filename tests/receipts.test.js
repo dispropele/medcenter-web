@@ -43,7 +43,8 @@ describe('Receipts Tests', () => {
     app.get('/receipts', auth, adminOnly, (req, res) => {
       const rows = db.prepare(`
         SELECT r.*, u.name patient_name, c.date contract_date,
-               (SELECT COUNT(*) FROM checks WHERE receipt_id=r.id) paid
+               COALESCE((SELECT SUM(amount) FROM checks WHERE receipt_id=r.id), 0) paid_amount,
+               CASE WHEN COALESCE((SELECT SUM(amount) FROM checks WHERE receipt_id=r.id), 0) >= r.amount THEN 1 ELSE 0 END fully_paid
         FROM receipts r
         JOIN contracts c ON r.contract_id=c.id
         JOIN users u ON c.patient_id=u.id
